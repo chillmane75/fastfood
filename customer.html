@@ -5,44 +5,53 @@
   <title>Kundeskjerm</title>
   <style>
     body {
-      background:#111;
+      background:#000;
       color:white;
-      font-family:Arial;
-      display:flex;
-      justify-content:space-around;
-      padding:40px;
+      font-family:Arial, sans-serif;
+      text-align:center;
+      padding:30px;
     }
+
     h1 {
-      text-align:center;
-      margin-bottom:20px;
+      margin-bottom:10px;
     }
-    .column {
-      width:45%;
+
+    h2 {
+      margin-top:30px;
+      color:#00ff99;
     }
+
     .order {
-      font-size:50px;
-      background:#222;
-      margin:15px;
-      padding:20px;
-      border-radius:10px;
-      text-align:center;
+      font-size:40px;
+      margin:8px;
     }
+
     .ready {
-      background:#0a7;
+      font-size:48px;
+      margin:10px;
+      color:#00ff99;
+    }
+
+    .blink {
+      animation: blink 1s infinite;
+    }
+
+    @keyframes blink {
+      0%   { opacity: 1; }
+      50%  { opacity: 0; }
+      100% { opacity: 1; }
     }
   </style>
 </head>
 <body>
 
-<div class="column">
-  <h1>NÅ LAGES</h1>
-  <div id="pending"></div>
-</div>
+<h1>BESTILLINGER</h1>
 
-<div class="column">
-  <h1>KLAR</h1>
-  <div id="ready"></div>
-</div>
+<h2>NÅ LAGES</h2>
+<div id="making"></div>
+
+<h2>KLAR</h2>
+<div id="ready"></div>
 
 <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
@@ -58,27 +67,45 @@
     appId: "1:831273156548:web:3217cdd0e76870c4af6e91"
   };
 
-  firebase.initializeApp(firebaseConfig);
+  if (!firebase.apps.length) {
+    firebase.initializeApp(firebaseConfig);
+  }
+
   var db = firebase.database();
 
-  db.ref("orders").on("value", function(snapshot) {
-    document.getElementById("pending").innerHTML = "";
-    document.getElementById("ready").innerHTML = "";
+  /* NÅ LAGES */
+  db.ref("orders").on("value", snap => {
+    const div = document.getElementById("making");
+    div.innerHTML = "";
+    snap.forEach(child => {
+      div.innerHTML += `<div class="order">ORDRE ${child.key}</div>`;
+    });
+  });
 
-    snapshot.forEach(function(child) {
-      var num = child.key;
-      var status = child.val();
+  /* KLAR + BLINK SISTE 30 SEK */
+  db.ref("readyOrders").on("value", snap => {
+    const div = document.getElementById("ready");
+    div.innerHTML = "";
+    const now = Date.now();
 
-      var div = document.createElement("div");
-      div.className = "order";
-      div.innerText = num;
+    snap.forEach(child => {
+      const num = child.key;
+      const data = child.val();
+      const readyTime = data.readyTime || now;
 
-      if (status === "ready") {
-        div.classList.add("ready");
-        document.getElementById("ready").appendChild(div);
-      } else {
-        document.getElementById("pending").appendChild(div);
+      const age = now - readyTime;
+      const remaining = 180000 - age;
+
+      const el = document.createElement("div");
+      el.className = "ready";
+      el.innerText = "ORDRE " + num;
+
+      // 🔴 Blink siste 30 sek
+      if (remaining <= 30000) {
+        el.classList.add("blink");
       }
+
+      div.appendChild(el);
     });
   });
 </script>
