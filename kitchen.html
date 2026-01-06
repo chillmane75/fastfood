@@ -7,36 +7,56 @@
     body {
       background:#000;
       color:white;
-      font-family:Arial;
+      font-family:Arial, sans-serif;
       text-align:center;
       padding:30px;
     }
+
+    h1 {
+      margin-bottom:20px;
+    }
+
     .order {
       background:#222;
       padding:20px;
-      margin:15px;
+      margin:15px auto;
       border-radius:10px;
       font-size:28px;
+      max-width:600px;
     }
+
     .allergy {
       color:#ff4444;
       font-weight:bold;
+      margin-top:8px;
     }
+
     .note {
       font-size:20px;
       margin-top:8px;
     }
+
     button {
       font-size:18px;
-      padding:8px 16px;
-      margin-top:10px;
+      padding:10px 18px;
+      margin-top:12px;
+      border:none;
+      border-radius:6px;
+      cursor:pointer;
+    }
+
+    .sound-btn {
+      margin-bottom:20px;
+      font-size:20px;
+      padding:12px 24px;
     }
   </style>
 </head>
 <body>
 
 <h1>KJØKKEN</h1>
-<button onclick="enableSound()">AKTIVER LYD</button>
+
+<button class="sound-btn" onclick="enableSound()">AKTIVER LYD</button>
 
 <div id="orders"></div>
 
@@ -48,6 +68,7 @@
 <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
 
 <script>
+  /* 🔥 FIREBASE CONFIG */
   var firebaseConfig = {
     apiKey: "AIzaSyBpCwh0JIuJphlEyCQTxhDOIdGm9fP5cg4",
     authDomain: "the-shit-3bfd8.firebaseapp.com",
@@ -58,23 +79,24 @@
     appId: "1:831273156548:web:3217cdd0e76870c4af6e91"
   };
 
-  /* ✅ SAFE FIREBASE INIT (VIKTIGSTE FIKS) */
+  /* SAFE INIT */
   if (!firebase.apps.length) {
     firebase.initializeApp(firebaseConfig);
   }
 
   var db = firebase.database();
 
-  /* ✅ RYDD GAMLE LYTTERE (STABIL LIVE-SERVICE) */
+  /* RYDD GAMLE LYTTERE */
   db.ref("orders").off();
 
-  var sound = false;
+  var soundEnabled = false;
 
   function enableSound() {
     document.getElementById("ding").play();
-    sound = true;
+    soundEnabled = true;
   }
 
+  /* 📥 NYE ORDRE */
   db.ref("orders").on("child_added", snap => {
     var num = snap.key;
     var o = snap.val();
@@ -84,7 +106,7 @@
     div.id = "order-" + num;
 
     div.innerHTML = `
-      ORDRE ${num}<br>
+      <div><strong>ORDRE ${num}</strong></div>
       ${o.allergy ? '<div class="allergy">⚠️ ALLERGI</div>' : ''}
       ${o.note ? `<div class="note">📝 ${o.note}</div>` : ''}
       <button onclick="done(${num})">FERDIG</button>
@@ -92,18 +114,42 @@
 
     document.getElementById("orders").appendChild(div);
 
-    if (sound) document.getElementById("ding").play();
+    if (soundEnabled) {
+      document.getElementById("ding").play();
+    }
   });
 
+  /* ❌ FJERN FRA LISTA NÅR DEN ER FERDIG */
   db.ref("orders").on("child_removed", snap => {
     var el = document.getElementById("order-" + snap.key);
     if (el) el.remove();
   });
 
+  /* ✅ FERDIG → FLYTT TIL KLAR + AUTO-FJERN */
   function done(num) {
-    db.ref("stats/completedOrders").transaction(n => (n || 0) + 1);
-    db.ref("orders/" + num).remove();
+    db.ref("orders/" + num).once("value", snap => {
+      var order = snap.val();
+      if (!order) return;
+
+      // Flytt til KLAR
+      db.ref("readyOrders/" + num).set({
+        ...order,
+        readyTime: Date.now()
+      });
+
+      // Fjern fra NÅ LAGES
+      db.ref("orders/" + num).remove();
+
+      // Stats
+      db.ref("stats/completedOrders").transaction(n => (n || 0) + 1);
+
+      // ⏱️ Auto-fjern etter 3 min
+      setTimeout(() => {
+        db.ref("readyOrders/" + num).remove();
+      }, 180000);
+    });
   }
 </script>
+
 </body>
 </html>
