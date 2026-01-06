@@ -7,9 +7,12 @@
     body {
       background:#111;
       color:white;
-      font-family:Arial;
+      font-family:Arial, sans-serif;
       text-align:center;
       padding:40px;
+    }
+    h1 {
+      margin-bottom:10px;
     }
     .num {
       font-size:90px;
@@ -20,8 +23,8 @@
       font-size:24px;
       margin-bottom:20px;
     }
-    input, label {
-      font-size:18px;
+    label {
+      font-size:20px;
     }
     textarea {
       width:80%;
@@ -45,13 +48,13 @@
 <h1>FOH</h1>
 
 <div class="status" id="status">Status: –</div>
-
 <div class="num" id="num">–</div>
 
 <label>
   <input type="checkbox" id="allergy">
   ⚠️ ALLERGI
 </label>
+
 <br><br>
 
 <textarea id="note" placeholder="Uten løk / uten saus / annet…"></textarea>
@@ -59,6 +62,7 @@
 <br>
 <button onclick="newOrder()">NY ORDRE</button>
 
+<!-- Firebase -->
 <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
 
@@ -73,29 +77,47 @@
     appId: "1:831273156548:web:3217cdd0e76870c4af6e91"
   };
 
-  firebase.initializeApp(firebaseConfig);
+  /* SAFE INIT */
+  if (!firebase.apps.length) {
+    firebase.initializeApp(firebaseConfig);
+  }
+
   var db = firebase.database();
 
+  /* NY ORDRE */
   function newOrder() {
-    db.ref("lastNumber").transaction(n => (n || 0) + 1, function(err, ok, snap) {
-      if (ok) {
-        var num = snap.val();
-        db.ref("orders/" + num).set({
-          allergy: document.getElementById("allergy").checked,
-          note: document.getElementById("note").value,
-          time: Date.now()
-        });
-
-        db.ref("stats/totalOrders").transaction(n => (n || 0) + 1);
-
-        document.getElementById("num").innerText = num;
-        document.getElementById("allergy").checked = false;
-        document.getElementById("note").value = "";
+    db.ref("lastNumber").transaction(n => (n || 0) + 1, function(err, committed, snap) {
+      if (err) {
+        console.error("Firebase error:", err);
+        return;
       }
+      if (!committed) return;
+
+      var num = snap.val();
+
+      db.ref("orders/" + num).set({
+        allergy: document.getElementById("allergy").checked,
+        note: document.getElementById("note").value,
+        time: Date.now()
+      });
+
+      db.ref("stats/totalOrders").transaction(n => (n || 0) + 1);
+
+      document.getElementById("num").innerText = num;
+      document.getElementById("allergy").checked = false;
+      document.getElementById("note").value = "";
     });
   }
 
+  /* STATUS (rolig / kø / rush) */
   db.ref("orders").on("value", snap => {
     var count = snap.numChildren();
     var s = "🟢 Rolig";
-    if (count >= 4) s = "
+    if (count >= 4) s = "🟡 Kø";
+    if (count >= 7) s = "🔴 Rush";
+    document.getElementById("status").innerText = "Status: " + s;
+  });
+</script>
+
+</body>
+</html>
