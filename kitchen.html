@@ -58,8 +58,16 @@
     appId: "1:831273156548:web:3217cdd0e76870c4af6e91"
   };
 
-  firebase.initializeApp(firebaseConfig);
+  /* ✅ SAFE FIREBASE INIT (VIKTIGSTE FIKS) */
+  if (!firebase.apps.length) {
+    firebase.initializeApp(firebaseConfig);
+  }
+
   var db = firebase.database();
+
+  /* ✅ RYDD GAMLE LYTTERE (STABIL LIVE-SERVICE) */
+  db.ref("orders").off();
+
   var sound = false;
 
   function enableSound() {
