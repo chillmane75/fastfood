@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Kundeskjerm</title>
+  <style>
+    body {
+      background:#111;
+      color:white;
+      font-family:Arial;
+      display:flex;
+      justify-content:space-around;
+      padding:40px;
+    }
+    h1 {
+      text-align:center;
+      margin-bottom:20px;
+    }
+    .column {
+      width:45%;
+    }
+    .order {
+      font-size:50px;
+      background:#222;
+      margin:15px;
+      padding:20px;
+      border-radius:10px;
+      text-align:center;
+    }
+    .ready {
+      background:#0a7;
+    }
+  </style>
+</head>
+<body>
+
+<div class="column">
+  <h1>NÅ LAGES</h1>
+  <div id="pending"></div>
+</div>
+
+<div class="column">
+  <h1>KLAR</h1>
+  <div id="ready"></div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
+
+<script>
+  var firebaseConfig = {
+    apiKey: "AIzaSyBpCwh0JIuJphlEyCQTxhDOIdGm9fP5cg4",
+    authDomain: "the-shit-3bfd8.firebaseapp.com",
+    databaseURL: "https://the-shit-3bfd8-default-rtdb.europe-west1.firebasedatabase.app",
+    projectId: "the-shit-3bfd8",
+    storageBucket: "the-shit-3bfd8.firebasestorage.app",
+    messagingSenderId: "831273156548",
+    appId: "1:831273156548:web:3217cdd0e76870c4af6e91"
+  };
+
+  firebase.initializeApp(firebaseConfig);
+  var db = firebase.database();
+
+  db.ref("orders").on("value", function(snapshot) {
+    document.getElementById("pending").innerHTML = "";
+    document.getElementById("ready").innerHTML = "";
+
+    snapshot.forEach(function(child) {
+      var num = child.key;
+      var status = child.val();
+
+      var div = document.createElement("div");
+      div.className = "order";
+      div.innerText = num;
+
+      if (status === "ready") {
+        div.classList.add("ready");
+        document.getElementById("ready").appendChild(div);
+      } else {
+        document.getElementById("pending").appendChild(div);
+      }
+    });
+  });
+</script>
+
+</body>
+</html>

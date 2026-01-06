@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Stats</title>
+  <style>
+    body {
+      background:#000;
+      color:white;
+      font-family:Arial;
+      text-align:center;
+      padding-top:80px;
+    }
+    .stat {
+      font-size:60px;
+      margin:30px;
+    }
+  </style>
+</head>
+<body>
+
+<h1>DAGENS STATS</h1>
+
+<div class="stat">Totale ordre: <span id="total">0</span></div>
+<div class="stat">Ferdige ordre: <span id="done">0</span></div>
+
+<script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
+
+<script>
+  var firebaseConfig = {
+    apiKey: "AIzaSyBpCwh0JIuJphlEyCQTxhDOIdGm9fP5cg4",
+    authDomain: "the-shit-3bfd8.firebaseapp.com",
+    databaseURL: "https://the-shit-3bfd8-default-rtdb.europe-west1.firebasedatabase.app",
+    projectId: "the-shit-3bfd8",
+    storageBucket: "the-shit-3bfd8.firebasestorage.app",
+    messagingSenderId: "831273156548",
+    appId: "1:831273156548:web:3217cdd0e76870c4af6e91"
+  };
+
+  firebase.initializeApp(firebaseConfig);
+  var db = firebase.database();
+
+  db.ref("stats/totalOrders").on("value", s => {
+    document.getElementById("total").innerText = s.val() || 0;
+  });
+
+  db.ref("stats/completedOrders").on("value", s => {
+    document.getElementById("done").innerText = s.val() || 0;
+  });
+</script>
+
+</body>
+</html>

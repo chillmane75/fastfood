@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Kjøkken</title>
+  <style>
+    body {
+      background:#000;
+      color:white;
+      font-family:Arial;
+      text-align:center;
+      padding:40px;
+    }
+    .order {
+      font-size:60px;
+      margin:20px;
+      padding:20px;
+      background:#222;
+      border-radius:10px;
+    }
+    button {
+      font-size:20px;
+      margin-left:20px;
+      padding:10px 20px;
+      cursor:pointer;
+    }
+  </style>
+</head>
+<body>
+
+<h1>KJØKKEN</h1>
+<button onclick="enableSound()">AKTIVER LYD</button>
+<div id="orders"></div>
+
+<audio id="ding" preload="auto">
+  <source src="order-up.mp3" type="audio/mpeg">
+</audio>
+
+<script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
+
+<script>
+  var firebaseConfig = {
+    apiKey: "AIzaSyBpCwh0JIuJphlEyCQTxhDOIdGm9fP5cg4",
+    authDomain: "the-shit-3bfd8.firebaseapp.com",
+    databaseURL: "https://the-shit-3bfd8-default-rtdb.europe-west1.firebasedatabase.app",
+    projectId: "the-shit-3bfd8",
+    storageBucket: "the-shit-3bfd8.firebasestorage.app",
+    messagingSenderId: "831273156548",
+    appId: "1:831273156548:web:3217cdd0e76870c4af6e91"
+  };
+
+  firebase.initializeApp(firebaseConfig);
+  var db = firebase.database();
+  var soundEnabled = false;
+
+  function enableSound() {
+    document.getElementById("ding").play();
+    soundEnabled = true;
+  }
+
+  db.ref("orders").on("child_added", function(snap) {
+    var num = snap.key;
+
+    var div = document.createElement("div");
+    div.className = "order";
+    div.id = "order-" + num;
+    div.innerHTML = `ORDRE ${num}
+      <button onclick="done(${num})">FERDIG</button>`;
+
+    document.getElementById("orders").appendChild(div);
+
+    if (soundEnabled) {
+      document.getElementById("ding").play();
+    }
+  });
+
+  db.ref("orders").on("child_removed", function(snap) {
+    var el = document.getElementById("order-" + snap.key);
+    if (el) el.remove();
+  });
+
+  function done(num) {
+    // stats
+    db.ref("stats/completedOrders").transaction(n => (n || 0) + 1);
+
+    // fjern ordre
+    db.ref("orders/" + num).remove();
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>FOH</title>
+  <style>
+    body {
+      background:#111;
+      color:white;
+      font-family:Arial;
+      text-align:center;
+      padding-top:60px;
+    }
+    .num {
+      font-size:120px;
+      color:#00ff99;
+      margin:30px 0;
+    }
+    button {
+      font-size:30px;
+      padding:20px 40px;
+      border:none;
+      border-radius:10px;
+      background:#00ff99;
+      cursor:pointer;
+    }
+  </style>
+</head>
+<body>
+
+<h1>KUNDENUMMER</h1>
+<div class="num" id="num">–</div>
+<button onclick="newOrder()">NY ORDRE</button>
+
+<script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
+
+<script>
+  var firebaseConfig = {
+    apiKey: "AIzaSyBpCwh0JIuJphlEyCQTxhDOIdGm9fP5cg4",
+    authDomain: "the-shit-3bfd8.firebaseapp.com",
+    databaseURL: "https://the-shit-3bfd8-default-rtdb.europe-west1.firebasedatabase.app",
+    projectId: "the-shit-3bfd8",
+    storageBucket: "the-shit-3bfd8.firebasestorage.app",
+    messagingSenderId: "831273156548",
+    appId: "1:831273156548:web:3217cdd0e76870c4af6e91"
+  };
+
+  firebase.initializeApp(firebaseConfig);
+  var db = firebase.database();
+
+  function newOrder() {
+    db.ref("lastNumber").transaction(function(n) {
+      return (n || 0) + 1;
+    }, function(err, committed, snap) {
+      if (committed) {
+        var num = snap.val();
+
+        // legg ordre
+        db.ref("orders/" + num).set("pending");
+
+        // stats
+        db.ref("stats/totalOrders").transaction(n => (n || 0) + 1);
+
+        document.getElementById("num").innerText = num;
+      }
+    });
+  }
+</script>
+</body>
+</html>
