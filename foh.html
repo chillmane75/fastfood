@@ -1,5 +1,3 @@
-<!-- trigger pages -->
-
 <!DOCTYPE html>
 <html>
 <head>
@@ -11,16 +9,30 @@
       color:white;
       font-family:Arial;
       text-align:center;
-      padding-top:60px;
+      padding:40px;
     }
     .num {
-      font-size:120px;
+      font-size:90px;
       color:#00ff99;
-      margin:30px 0;
+      margin:20px 0;
+    }
+    .status {
+      font-size:24px;
+      margin-bottom:20px;
+    }
+    input, label {
+      font-size:18px;
+    }
+    textarea {
+      width:80%;
+      height:60px;
+      font-size:16px;
+      margin-top:10px;
     }
     button {
-      font-size:30px;
-      padding:20px 40px;
+      font-size:26px;
+      padding:15px 35px;
+      margin-top:20px;
       border:none;
       border-radius:10px;
       background:#00ff99;
@@ -30,8 +42,21 @@
 </head>
 <body>
 
-<h1>KUNDENUMMER</h1>
+<h1>FOH</h1>
+
+<div class="status" id="status">Status: –</div>
+
 <div class="num" id="num">–</div>
+
+<label>
+  <input type="checkbox" id="allergy">
+  ⚠️ ALLERGI
+</label>
+<br><br>
+
+<textarea id="note" placeholder="Uten løk / uten saus / annet…"></textarea>
+
+<br>
 <button onclick="newOrder()">NY ORDRE</button>
 
 <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
@@ -52,23 +77,25 @@
   var db = firebase.database();
 
   function newOrder() {
-    db.ref("lastNumber").transaction(function(n) {
-      return (n || 0) + 1;
-    }, function(err, committed, snap) {
-      if (committed) {
+    db.ref("lastNumber").transaction(n => (n || 0) + 1, function(err, ok, snap) {
+      if (ok) {
         var num = snap.val();
+        db.ref("orders/" + num).set({
+          allergy: document.getElementById("allergy").checked,
+          note: document.getElementById("note").value,
+          time: Date.now()
+        });
 
-        // legg ordre
-        db.ref("orders/" + num).set("pending");
-
-        // stats
         db.ref("stats/totalOrders").transaction(n => (n || 0) + 1);
 
         document.getElementById("num").innerText = num;
+        document.getElementById("allergy").checked = false;
+        document.getElementById("note").value = "";
       }
     });
   }
-</script>
-</body>
-</html>
 
+  db.ref("orders").on("value", snap => {
+    var count = snap.numChildren();
+    var s = "🟢 Rolig";
+    if (count >= 4) s = "
