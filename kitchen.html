@@ -19,10 +19,11 @@
     .order {
       background:#222;
       padding:20px;
-      margin:15px auto;
+      margin:12px auto;
       border-radius:10px;
       font-size:28px;
       max-width:600px;
+      text-align:left;
     }
 
     .allergy {
@@ -79,16 +80,11 @@
     appId: "1:831273156548:web:3217cdd0e76870c4af6e91"
   };
 
-  /* SAFE INIT */
   if (!firebase.apps.length) {
     firebase.initializeApp(firebaseConfig);
   }
 
   var db = firebase.database();
-
-  /* RYDD GAMLE LYTTERE */
-  db.ref("orders").off();
-
   var soundEnabled = false;
 
   function enableSound() {
@@ -96,54 +92,58 @@
     soundEnabled = true;
   }
 
-  /* 📥 NYE ORDRE */
-  db.ref("orders").on("child_added", snap => {
-    var num = snap.key;
-    var o = snap.val();
+  /* 🔁 LYTTER PÅ ALLE ORDRE + SORTERER */
+  db.ref("orders").on("value", snap => {
+    const ordersDiv = document.getElementById("orders");
+    ordersDiv.innerHTML = "";
 
-    var div = document.createElement("div");
-    div.className = "order";
-    div.id = "order-" + num;
+    let orders = [];
 
-    div.innerHTML = `
-      <div><strong>ORDRE ${num}</strong></div>
-      ${o.allergy ? '<div class="allergy">⚠️ ALLERGI</div>' : ''}
-      ${o.note ? `<div class="note">📝 ${o.note}</div>` : ''}
-      <button onclick="done(${num})">FERDIG</button>
-    `;
+    snap.forEach(child => {
+      orders.push({
+        num: child.key,
+        ...child.val()
+      });
+    });
 
-    document.getElementById("orders").appendChild(div);
+    /* 🔥 SORTERING: ELDSTE FØRST */
+    orders.sort((a, b) => a.time - b.time);
 
-    if (soundEnabled) {
+    orders.forEach(o => {
+      const div = document.createElement("div");
+      div.className = "order";
+      div.id = "order-" + o.num;
+
+      div.innerHTML = `
+        <div><strong>ORDRE ${o.num}</strong></div>
+        ${o.allergy ? '<div class="allergy">⚠️ ALLERGI</div>' : ''}
+        ${o.note ? `<div class="note">📝 ${o.note}</div>` : ''}
+        <button onclick="done(${o.num})">FERDIG</button>
+      `;
+
+      ordersDiv.appendChild(div);
+    });
+
+    /* 🔊 Lyd hvis ny ordre kommer inn */
+    if (soundEnabled && orders.length > ordersDiv.childElementCount) {
       document.getElementById("ding").play();
     }
   });
 
-  /* ❌ FJERN FRA LISTA NÅR DEN ER FERDIG */
-  db.ref("orders").on("child_removed", snap => {
-    var el = document.getElementById("order-" + snap.key);
-    if (el) el.remove();
-  });
-
-  /* ✅ FERDIG → FLYTT TIL KLAR + AUTO-FJERN */
+  /* ✅ FERDIG → FLYTT TIL KLAR */
   function done(num) {
     db.ref("orders/" + num).once("value", snap => {
-      var order = snap.val();
+      const order = snap.val();
       if (!order) return;
 
-      // Flytt til KLAR
       db.ref("readyOrders/" + num).set({
         ...order,
         readyTime: Date.now()
       });
 
-      // Fjern fra NÅ LAGES
       db.ref("orders/" + num).remove();
-
-      // Stats
       db.ref("stats/completedOrders").transaction(n => (n || 0) + 1);
 
-      // ⏱️ Auto-fjern etter 3 min
       setTimeout(() => {
         db.ref("readyOrders/" + num).remove();
       }, 180000);
