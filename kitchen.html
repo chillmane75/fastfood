@@ -9,20 +9,27 @@
       color:white;
       font-family:Arial;
       text-align:center;
-      padding:40px;
+      padding:30px;
     }
     .order {
-      font-size:60px;
-      margin:20px;
-      padding:20px;
       background:#222;
+      padding:20px;
+      margin:15px;
       border-radius:10px;
+      font-size:28px;
+    }
+    .allergy {
+      color:#ff4444;
+      font-weight:bold;
+    }
+    .note {
+      font-size:20px;
+      margin-top:8px;
     }
     button {
-      font-size:20px;
-      margin-left:20px;
-      padding:10px 20px;
-      cursor:pointer;
+      font-size:18px;
+      padding:8px 16px;
+      margin-top:10px;
     }
   </style>
 </head>
@@ -30,9 +37,10 @@
 
 <h1>KJØKKEN</h1>
 <button onclick="enableSound()">AKTIVER LYD</button>
+
 <div id="orders"></div>
 
-<audio id="ding" preload="auto">
+<audio id="ding">
   <source src="order-up.mp3" type="audio/mpeg">
 </audio>
 
@@ -52,39 +60,40 @@
 
   firebase.initializeApp(firebaseConfig);
   var db = firebase.database();
-  var soundEnabled = false;
+  var sound = false;
 
   function enableSound() {
     document.getElementById("ding").play();
-    soundEnabled = true;
+    sound = true;
   }
 
-  db.ref("orders").on("child_added", function(snap) {
+  db.ref("orders").on("child_added", snap => {
     var num = snap.key;
+    var o = snap.val();
 
     var div = document.createElement("div");
     div.className = "order";
     div.id = "order-" + num;
-    div.innerHTML = `ORDRE ${num}
-      <button onclick="done(${num})">FERDIG</button>`;
+
+    div.innerHTML = `
+      ORDRE ${num}<br>
+      ${o.allergy ? '<div class="allergy">⚠️ ALLERGI</div>' : ''}
+      ${o.note ? `<div class="note">📝 ${o.note}</div>` : ''}
+      <button onclick="done(${num})">FERDIG</button>
+    `;
 
     document.getElementById("orders").appendChild(div);
 
-    if (soundEnabled) {
-      document.getElementById("ding").play();
-    }
+    if (sound) document.getElementById("ding").play();
   });
 
-  db.ref("orders").on("child_removed", function(snap) {
+  db.ref("orders").on("child_removed", snap => {
     var el = document.getElementById("order-" + snap.key);
     if (el) el.remove();
   });
 
   function done(num) {
-    // stats
     db.ref("stats/completedOrders").transaction(n => (n || 0) + 1);
-
-    // fjern ordre
     db.ref("orders/" + num).remove();
   }
 </script>
