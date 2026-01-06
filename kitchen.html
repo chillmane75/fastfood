@@ -17,14 +17,19 @@
     }
 
     .order {
-      background:#222;
       padding:20px;
       margin:12px auto;
       border-radius:10px;
       font-size:28px;
-      max-width:600px;
+      max-width:650px;
       text-align:left;
+      transition: background 0.3s;
     }
+
+    /* 🎨 FARGER */
+    .green { background:#1e3d2f; }
+    .yellow { background:#4a4a1e; }
+    .red { background:#4a1e1e; }
 
     .allergy {
       color:#ff4444;
@@ -86,18 +91,22 @@
 
   var db = firebase.database();
   var soundEnabled = false;
+  var lastOrderCount = 0;
 
   function enableSound() {
-    document.getElementById("ding").play();
+    const audio = document.getElementById("ding");
+    audio.currentTime = 0;
+    audio.play();
     soundEnabled = true;
   }
 
-  /* 🔁 LYTTER PÅ ALLE ORDRE + SORTERER */
+  /* 🔁 LYTTER + SORTERER + FARGER */
   db.ref("orders").on("value", snap => {
     const ordersDiv = document.getElementById("orders");
     ordersDiv.innerHTML = "";
 
     let orders = [];
+    const now = Date.now();
 
     snap.forEach(child => {
       orders.push({
@@ -106,12 +115,18 @@
       });
     });
 
-    /* 🔥 SORTERING: ELDSTE FØRST */
+    /* 🔝 ELDSTE FØRST */
     orders.sort((a, b) => a.time - b.time);
 
     orders.forEach(o => {
+      const age = now - o.time;
+
+      let colorClass = "green";
+      if (age > 240000) colorClass = "red";       // 4+ min
+      else if (age > 120000) colorClass = "yellow"; // 2–4 min
+
       const div = document.createElement("div");
-      div.className = "order";
+      div.className = `order ${colorClass}`;
       div.id = "order-" + o.num;
 
       div.innerHTML = `
@@ -124,10 +139,14 @@
       ordersDiv.appendChild(div);
     });
 
-    /* 🔊 Lyd hvis ny ordre kommer inn */
-    if (soundEnabled && orders.length > ordersDiv.childElementCount) {
-      document.getElementById("ding").play();
+    /* 🔊 LYD – ALLTID NÅR ANTALL ØKER */
+    if (soundEnabled && orders.length > lastOrderCount) {
+      const audio = document.getElementById("ding");
+      audio.currentTime = 0; // 🔥 start på nytt selv om den spiller
+      audio.play();
     }
+
+    lastOrderCount = orders.length;
   });
 
   /* ✅ FERDIG → FLYTT TIL KLAR */
