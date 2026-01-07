@@ -11,27 +11,37 @@
       text-align:center;
       padding:40px;
     }
+
     h1 {
       margin-bottom:10px;
     }
+
     .num {
       font-size:90px;
       color:#00ff99;
       margin:20px 0;
     }
+
     .status {
       font-size:24px;
       margin-bottom:20px;
     }
+
+    select, textarea {
+      width:80%;
+      font-size:18px;
+      padding:10px;
+      margin-top:10px;
+    }
+
     label {
       font-size:20px;
     }
+
     textarea {
-      width:80%;
       height:60px;
-      font-size:16px;
-      margin-top:10px;
     }
+
     button {
       font-size:26px;
       padding:15px 35px;
@@ -50,6 +60,10 @@
 <div class="status" id="status">Status: –</div>
 <div class="num" id="num">–</div>
 
+<select id="dish"></select>
+
+<br><br>
+
 <label>
   <input type="checkbox" id="allergy">
   ⚠️ ALLERGI
@@ -62,11 +76,11 @@
 <br>
 <button onclick="newOrder()">NY ORDRE</button>
 
-<!-- Firebase -->
 <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
 
 <script>
+  /* 🔥 FIREBASE CONFIG */
   var firebaseConfig = {
     apiKey: "AIzaSyBpCwh0JIuJphlEyCQTxhDOIdGm9fP5cg4",
     authDomain: "the-shit-3bfd8.firebaseapp.com",
@@ -77,31 +91,61 @@
     appId: "1:831273156548:web:3217cdd0e76870c4af6e91"
   };
 
-  /* SAFE INIT */
-  if (!firebase.apps.length) {
-    firebase.initializeApp(firebaseConfig);
-  }
+  if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+  const db = firebase.database();
 
-  var db = firebase.database();
+  let menu = {};
 
-  /* NY ORDRE */
+  /* 🍔 HENT MENY FRA MANAGER */
+  db.ref("menu").on("value", snap => {
+    const sel = document.getElementById("dish");
+    sel.innerHTML = "";
+    menu = {};
+
+    snap.forEach(child => {
+      const d = child.val();
+      const left = d.max - d.sold;
+      menu[child.key] = d;
+
+      const opt = document.createElement("option");
+      opt.value = child.key;
+      opt.text = left <= 0
+        ? `${d.name} (UTSOLGT)`
+        : `${d.name} (${left} igjen)`;
+
+      opt.disabled = left <= 0;
+      sel.appendChild(opt);
+    });
+
+    if (!sel.value && sel.options.length > 0) {
+      sel.selectedIndex = 0;
+    }
+  });
+
+  /* 🆕 NY ORDRE */
   function newOrder() {
-    db.ref("lastNumber").transaction(n => (n || 0) + 1, function(err, committed, snap) {
-      if (err) {
-        console.error("Firebase error:", err);
-        return;
-      }
-      if (!committed) return;
+    const dishId = document.getElementById("dish").value;
+    const dish = menu[dishId];
 
-      var num = snap.val();
+    if (!dish || dish.sold >= dish.max) {
+      alert("❌ Denne retten er utsolgt");
+      return;
+    }
+
+    db.ref("lastNumber").transaction(n => (n || 0) + 1, (err, ok, snap) => {
+      if (!ok) return;
+
+      const num = snap.val();
 
       db.ref("orders/" + num).set({
+        dish: dish.name,
         allergy: document.getElementById("allergy").checked,
         note: document.getElementById("note").value,
         time: Date.now()
       });
 
-      db.ref("stats/totalOrders").transaction(n => (n || 0) + 1);
+      db.ref("menu/" + dishId + "/sold")
+        .transaction(n => (n || 0) + 1);
 
       document.getElementById("num").innerText = num;
       document.getElementById("allergy").checked = false;
@@ -109,10 +153,10 @@
     });
   }
 
-  /* STATUS (rolig / kø / rush) */
+  /* 📊 STATUS (rolig / kø / rush) */
   db.ref("orders").on("value", snap => {
-    var count = snap.numChildren();
-    var s = "🟢 Rolig";
+    const count = snap.numChildren();
+    let s = "🟢 Rolig";
     if (count >= 4) s = "🟡 Kø";
     if (count >= 7) s = "🔴 Rush";
     document.getElementById("status").innerText = "Status: " + s;
