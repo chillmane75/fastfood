@@ -2,33 +2,55 @@
 <html>
 <head>
   <meta charset="UTF-8">
-  <title>Stats</title>
+  <title>Manager</title>
   <style>
     body {
-      background:#000;
+      background:#111;
       color:white;
-      font-family:Arial;
-      text-align:center;
-      padding-top:80px;
+      font-family:Arial, sans-serif;
+      padding:30px;
     }
-    .stat {
-      font-size:60px;
-      margin:30px;
+
+    h1 {
+      text-align:center;
+    }
+
+    input, button {
+      font-size:16px;
+      padding:6px;
+      margin:4px;
+    }
+
+    .dish {
+      background:#222;
+      padding:15px;
+      margin:10px 0;
+      border-radius:8px;
+    }
+
+    .soldout {
+      color:#ff4444;
+      font-weight:bold;
     }
   </style>
 </head>
 <body>
 
-<h1>DAGENS STATS</h1>
+<h1>🧑‍💼 MANAGER</h1>
 
-<div class="stat">Totale ordre: <span id="total">0</span></div>
-<div class="stat">Ferdige ordre: <span id="done">0</span></div>
+<h2>➕ Legg til rett</h2>
+<input id="name" placeholder="Navn">
+<input id="max" type="number" placeholder="Maks antall">
+<button onclick="addDish()">Legg til</button>
+
+<h2>📋 Retter</h2>
+<div id="menu"></div>
 
 <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
 
 <script>
-  var firebaseConfig = {
+  const firebaseConfig = {
     apiKey: "AIzaSyBpCwh0JIuJphlEyCQTxhDOIdGm9fP5cg4",
     authDomain: "the-shit-3bfd8.firebaseapp.com",
     databaseURL: "https://the-shit-3bfd8-default-rtdb.europe-west1.firebasedatabase.app",
@@ -38,15 +60,42 @@
     appId: "1:831273156548:web:3217cdd0e76870c4af6e91"
   };
 
-  firebase.initializeApp(firebaseConfig);
-  var db = firebase.database();
+  if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+  const db = firebase.database();
 
-  db.ref("stats/totalOrders").on("value", s => {
-    document.getElementById("total").innerText = s.val() || 0;
-  });
+  function addDish() {
+    const name = document.getElementById("name").value;
+    const max = parseInt(document.getElementById("max").value);
+    if (!name || !max) return alert("Fyll alt");
 
-  db.ref("stats/completedOrders").on("value", s => {
-    document.getElementById("done").innerText = s.val() || 0;
+    const id = name.toLowerCase().replace(/\s+/g, "-");
+
+    db.ref("menu/" + id).set({
+      name,
+      max,
+      sold: 0
+    });
+
+    document.getElementById("name").value = "";
+    document.getElementById("max").value = "";
+  }
+
+  db.ref("menu").on("value", snap => {
+    const div = document.getElementById("menu");
+    div.innerHTML = "";
+
+    snap.forEach(child => {
+      const d = child.val();
+      const left = d.max - d.sold;
+
+      div.innerHTML += `
+        <div class="dish">
+          <strong>${d.name}</strong><br>
+          Solgt: ${d.sold} / ${d.max}<br>
+          ${left <= 0 ? '<span class="soldout">UTSOLGT</span>' : `Igjen: ${left}`}
+        </div>
+      `;
+    });
   });
 </script>
 
