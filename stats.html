@@ -11,7 +11,7 @@
       padding:30px;
     }
 
-    h1 {
+    h1, h2 {
       text-align:center;
     }
 
@@ -24,13 +24,25 @@
     .dish {
       background:#222;
       padding:15px;
-      margin:10px 0;
+      margin:12px 0;
       border-radius:8px;
     }
 
     .soldout {
       color:#ff4444;
       font-weight:bold;
+    }
+
+    .controls button {
+      margin-right:6px;
+    }
+
+    .stats {
+      background:#1a1a1a;
+      margin-top:10px;
+      padding:10px;
+      border-radius:6px;
+      font-size:14px;
     }
   </style>
 </head>
@@ -64,16 +76,21 @@
   const db = firebase.database();
 
   function addDish() {
-    const name = document.getElementById("name").value;
+    const name = document.getElementById("name").value.trim();
     const max = parseInt(document.getElementById("max").value);
-    if (!name || !max) return alert("Fyll alt");
+
+    if (!name || !max) {
+      alert("Fyll ut alt");
+      return;
+    }
 
     const id = name.toLowerCase().replace(/\s+/g, "-");
 
     db.ref("menu/" + id).set({
       name,
       max,
-      sold: 0
+      sold: 0,
+      created: Date.now()
     });
 
     document.getElementById("name").value = "";
@@ -85,18 +102,76 @@
     div.innerHTML = "";
 
     snap.forEach(child => {
+      const id = child.key;
       const d = child.val();
       const left = d.max - d.sold;
 
-      div.innerHTML += `
-        <div class="dish">
-          <strong>${d.name}</strong><br>
-          Solgt: ${d.sold} / ${d.max}<br>
-          ${left <= 0 ? '<span class="soldout">UTSOLGT</span>' : `Igjen: ${left}`}
+      const el = document.createElement("div");
+      el.className = "dish";
+
+      el.innerHTML = `
+        <strong>${d.name}</strong><br>
+        Solgt: ${d.sold} / ${d.max}
+        ${left <= 0 ? '<span class="soldout"> (UTSOLGT)</span>' : ''}
+        <br><br>
+
+        <div class="controls">
+          <input type="number" id="edit-${id}" value="${d.max}" style="width:80px">
+          <button onclick="updateMax('${id}')">✏️ Oppdater</button>
+          <button onclick="removeDish('${id}')">🗑️ Slett</button>
+          <button onclick="toggleStats('${id}')">📊 Stats</button>
         </div>
+
+        <div class="stats" id="stats-${id}" style="display:none"></div>
       `;
+
+      div.appendChild(el);
     });
   });
+
+  function updateMax(id) {
+    const val = parseInt(document.getElementById("edit-" + id).value);
+    if (!val) return;
+    db.ref("menu/" + id + "/max").set(val);
+  }
+
+  function removeDish(id) {
+    if (!confirm("Slette denne retten?")) return;
+    db.ref("menu/" + id).remove();
+  }
+
+  function toggleStats(id) {
+    const box = document.getElementById("stats-" + id);
+    if (box.style.display === "block") {
+      box.style.display = "none";
+      return;
+    }
+
+    db.ref("menu/" + id).once("value", snap => {
+      const d = snap.val();
+      if (!d) return;
+
+      const durationMin = ((Date.now() - d.created) / 60000).toFixed(1);
+      const speed = d.sold > 0
+        ? (durationMin / d.sold).toFixed(1)
+        : "–";
+
+      let rush = "Rolig";
+      if (speed !== "–") {
+        if (speed < 1) rush = "🔥 RUSH";
+        else if (speed < 2) rush = "🟡 Travelt";
+      }
+
+      box.innerHTML = `
+        ⏱️ Tid i salg: ${durationMin} min<br>
+        📦 Solgt: ${d.sold}<br>
+        ⚡ Snitt: ${speed} min per porsjon<br>
+        📈 Tempo: ${rush}
+      `;
+
+      box.style.display = "block";
+    });
+  }
 </script>
 
 </body>
