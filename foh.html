@@ -11,21 +11,25 @@ body {
   text-align:center;
   padding:40px;
 }
+
 .num {
   font-size:90px;
   color:#00ff99;
   margin:20px 0;
 }
+
 .status {
   font-size:24px;
   margin-bottom:20px;
 }
+
 select, textarea {
   width:80%;
   font-size:18px;
   padding:10px;
   margin-top:10px;
 }
+
 button {
   font-size:26px;
   padding:15px 35px;
@@ -35,6 +39,7 @@ button {
   background:#00ff99;
   cursor:pointer;
 }
+
 .undo {
   background:#ffcc00;
   color:black;
@@ -79,9 +84,17 @@ var firebaseConfig = {
 if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
 
+/* 🔢 STATE */
 let menu = {};
 let lastOrderId = null;
 let lastDishId = null;
+
+/* 🔢 ALLTID SYNK NUMMER FRA FIREBASE */
+db.ref("lastNumber").on("value", snap => {
+  const val = snap.val();
+  document.getElementById("num").innerText =
+    typeof val === "number" ? val : "–";
+});
 
 /* 🍔 HENT MENY */
 db.ref("menu").on("value", snap => {
@@ -122,12 +135,12 @@ function newOrder() {
   }
 
   db.ref("lastNumber").transaction(n => (n || 0) + 1, (err, ok, snap) => {
-    if (!ok) {
+    if (!ok || !snap.exists()) {
       alert("Kunne ikke opprette ordre");
       return;
     }
 
-    const num = snap.val();
+    const num = Number(snap.val());
 
     db.ref("orders/" + num).set({
       dish: dish.name,
@@ -142,42 +155,38 @@ function newOrder() {
     lastOrderId = num;
     lastDishId = dishId;
 
-    document.getElementById("num").innerText = num;
     document.getElementById("allergy").checked = false;
     document.getElementById("note").value = "";
   });
 }
 
-/* ↩️ UNDO SISTE */
+/* ↩️ UNDO – EKTE ROLLBACK */
 function undoLast() {
-  if (!lastOrderId || !lastDishId) {
+  if (lastOrderId === null || lastDishId === null) {
     alert("Ingen ordre å angre");
     return;
   }
 
-  // 1. Slett ordren
-  db.ref("orders/" + lastOrderId).remove();
+  const orderId = Number(lastOrderId);
 
-  // 2. Trekk tilbake solgt-teller
+  // 1️⃣ Slett ordren
+  db.ref("orders/" + orderId).remove();
+
+  // 2️⃣ Rull tilbake solgt
   db.ref("menu/" + lastDishId + "/sold")
     .transaction(n => Math.max((n || 1) - 1, 0));
 
-  // 3. Rull tilbake ordrenummeret (KUN siste)
+  // 3️⃣ RULL TILBAKE NUMMERET KUN HVIS DET ER SISTE
   db.ref("lastNumber").transaction(n => {
-    if (n === lastOrderId) {
+    if (Number(n) === orderId) {
       return n - 1;
     }
     return n;
-  }, (err, ok, snap) => {
-    if (ok && snap.exists()) {
-      document.getElementById("num").innerText = snap.val();
-    }
   });
 
   lastOrderId = null;
   lastDishId = null;
 }
-
 
 /* 📊 STATUS */
 db.ref("orders").on("value", snap => {
@@ -191,4 +200,3 @@ db.ref("orders").on("value", snap => {
 
 </body>
 </html>
-
