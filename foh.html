@@ -1,167 +1,125 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <meta charset="UTF-8">
-  <title>FOH</title>
-  <style>
-    body {
-      background:#111;
-      color:white;
-      font-family:Arial, sans-serif;
-      text-align:center;
-      padding:40px;
-    }
-
-    h1 {
-      margin-bottom:10px;
-    }
-
-    .num {
-      font-size:90px;
-      color:#00ff99;
-      margin:20px 0;
-    }
-
-    .status {
-      font-size:24px;
-      margin-bottom:20px;
-    }
-
-    select, textarea {
-      width:80%;
-      font-size:18px;
-      padding:10px;
-      margin-top:10px;
-    }
-
-    label {
-      font-size:20px;
-    }
-
-    textarea {
-      height:60px;
-    }
-
-    button {
-      font-size:26px;
-      padding:15px 35px;
-      margin-top:20px;
-      border:none;
-      border-radius:10px;
-      background:#00ff99;
-      cursor:pointer;
-    }
-  </style>
+<meta charset="UTF-8">
+<title>FOH</title>
+<style>
+body {
+  background:#111;
+  color:white;
+  font-family:Arial, sans-serif;
+  text-align:center;
+  padding:40px;
+}
+.num { font-size:90px; color:#00ff99; margin:20px 0; }
+.status { font-size:24px; margin-bottom:20px; }
+select, textarea { width:80%; font-size:18px; padding:10px; margin-top:10px; }
+button {
+  font-size:26px;
+  padding:15px 35px;
+  margin-top:20px;
+  border:none;
+  border-radius:10px;
+  background:#00ff99;
+  cursor:pointer;
+}
+.undo { background:#ffcc00; color:black; }
+</style>
 </head>
 <body>
 
 <h1>FOH</h1>
-
 <div class="status" id="status">Status: –</div>
 <div class="num" id="num">–</div>
 
-<select id="dish"></select>
+<select id="dish"></select><br><br>
 
-<br><br>
+<label><input type="checkbox" id="allergy"> ⚠️ ALLERGI</label><br><br>
+<textarea id="note" placeholder="Notat…"></textarea><br>
 
-<label>
-  <input type="checkbox" id="allergy">
-  ⚠️ ALLERGI
-</label>
-
-<br><br>
-
-<textarea id="note" placeholder="Uten løk / uten saus / annet…"></textarea>
-
-<br>
-<button onclick="newOrder()">NY ORDRE</button>
+<button onclick="newOrder()">NY ORDRE</button><br>
+<button class="undo" onclick="undoLast()">↩️ UNDO</button>
 
 <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
 
 <script>
-  /* 🔥 FIREBASE CONFIG */
-  var firebaseConfig = {
-    apiKey: "AIzaSyBpCwh0JIuJphlEyCQTxhDOIdGm9fP5cg4",
-    authDomain: "the-shit-3bfd8.firebaseapp.com",
-    databaseURL: "https://the-shit-3bfd8-default-rtdb.europe-west1.firebasedatabase.app",
-    projectId: "the-shit-3bfd8",
-    storageBucket: "the-shit-3bfd8.firebasestorage.app",
-    messagingSenderId: "831273156548",
-    appId: "1:831273156548:web:3217cdd0e76870c4af6e91"
-  };
+var firebaseConfig = {
+  apiKey: "AIzaSyBpCwh0JIuJphlEyCQTxhDOIdGm9fP5cg4",
+  databaseURL: "https://the-shit-3bfd8-default-rtdb.europe-west1.firebasedatabase.app"
+};
+if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
 
-  if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
-  const db = firebase.database();
+let menu = {};
+let lastOrderId = null;
+let lastDishId = null;
 
-  let menu = {};
+db.ref("menu").on("value", snap => {
+  const sel = document.getElementById("dish");
+  sel.innerHTML = "";
+  menu = {};
 
-  /* 🍔 HENT MENY FRA MANAGER */
-  db.ref("menu").on("value", snap => {
-    const sel = document.getElementById("dish");
-    sel.innerHTML = "";
-    menu = {};
+  snap.forEach(child => {
+    const d = child.val();
+    const left = d.max - d.sold;
+    menu[child.key] = d;
 
-    snap.forEach(child => {
-      const d = child.val();
-      const left = d.max - d.sold;
-      menu[child.key] = d;
+    let status = "🟢 Tilgjengelig";
+    if (left <= 0) status = "🔴 Utsolgt";
+    else if (left <= 3) status = "🟡 Få igjen";
 
-      const opt = document.createElement("option");
-      opt.value = child.key;
-      opt.text = left <= 0
-        ? `${d.name} (UTSOLGT)`
-        : `${d.name} (${left} igjen)`;
+    const opt = document.createElement("option");
+    opt.value = child.key;
+    opt.text = `${d.name} – ${status}`;
+    opt.disabled = left <= 0;
+    sel.appendChild(opt);
+  });
+});
 
-      opt.disabled = left <= 0;
-      sel.appendChild(opt);
+function newOrder() {
+  const dishId = dish.value;
+  const dish = menu[dishId];
+  if (!dish) return;
+
+  db.ref("lastNumber").transaction(n => (n || 0) + 1, (err, ok, snap) => {
+    if (!ok) return;
+    const num = snap.val();
+
+    db.ref("orders/" + num).set({
+      dish: dish.name,
+      allergy: allergy.checked,
+      note: note.value,
+      time: Date.now()
     });
 
-    if (!sel.value && sel.options.length > 0) {
-      sel.selectedIndex = 0;
-    }
+    db.ref("menu/" + dishId + "/sold").transaction(n => (n || 0) + 1);
+
+    lastOrderId = num;
+    lastDishId = dishId;
+
+    numEl.innerText = num;
+    allergy.checked = false;
+    note.value = "";
   });
+}
 
-  /* 🆕 NY ORDRE */
-  function newOrder() {
-    const dishId = document.getElementById("dish").value;
-    const dish = menu[dishId];
+function undoLast() {
+  if (!lastOrderId) return alert("Ingen ordre å angre");
+  db.ref("orders/" + lastOrderId).remove();
+  db.ref("menu/" + lastDishId + "/sold")
+    .transaction(n => Math.max((n || 1) - 1, 0));
+  lastOrderId = null;
+  lastDishId = null;
+}
 
-    if (!dish || dish.sold >= dish.max) {
-      alert("❌ Denne retten er utsolgt");
-      return;
-    }
-
-    db.ref("lastNumber").transaction(n => (n || 0) + 1, (err, ok, snap) => {
-      if (!ok) return;
-
-      const num = snap.val();
-
-      db.ref("orders/" + num).set({
-        dish: dish.name,
-        allergy: document.getElementById("allergy").checked,
-        note: document.getElementById("note").value,
-        time: Date.now()
-      });
-
-      db.ref("menu/" + dishId + "/sold")
-        .transaction(n => (n || 0) + 1);
-
-      document.getElementById("num").innerText = num;
-      document.getElementById("allergy").checked = false;
-      document.getElementById("note").value = "";
-    });
-  }
-
-  /* 📊 STATUS (rolig / kø / rush) */
-  db.ref("orders").on("value", snap => {
-    const count = snap.numChildren();
-    let s = "🟢 Rolig";
-    if (count >= 4) s = "🟡 Kø";
-    if (count >= 7) s = "🔴 Rush";
-    document.getElementById("status").innerText = "Status: " + s;
-  });
+db.ref("orders").on("value", snap => {
+  const c = snap.numChildren();
+  let s = "🟢 Rolig";
+  if (c >= 4) s = "🟡 Kø";
+  if (c >= 7) s = "🔴 Rush";
+  status.innerText = "Status: " + s;
+});
 </script>
-
 </body>
 </html>
