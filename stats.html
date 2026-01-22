@@ -1,37 +1,214 @@
 <!DOCTYPE html>
 <html>
 <head>
-<meta charset="UTF-8">
-<title>Manager</title>
-<style>
-body{background:#111;color:white;font-family:Arial;padding:30px;}
-button{font-size:16px;padding:8px;margin:4px;}
-</style>
+  <meta charset="UTF-8">
+  <title>Manager</title>
+  <style>
+    body {
+      background:#111;
+      color:white;
+      font-family:Arial, sans-serif;
+      padding:30px;
+    }
+
+    h1, h2 {
+      text-align:center;
+    }
+
+    input, button {
+      font-size:16px;
+      padding:6px;
+      margin:4px;
+    }
+
+    .dish {
+      background:#222;
+      padding:15px;
+      margin:12px 0;
+      border-radius:8px;
+    }
+
+    .soldout {
+      color:#ff4444;
+      font-weight:bold;
+    }
+
+    .controls button {
+      margin-right:6px;
+    }
+
+    .stats {
+      background:#1a1a1a;
+      margin-top:10px;
+      padding:10px;
+      border-radius:6px;
+      font-size:14px;
+    }
+
+    .reset {
+      background:#ff4444;
+      color:white;
+      border:none;
+      border-radius:8px;
+      padding:10px 16px;
+      cursor:pointer;
+      display:block;
+      margin:0 auto 25px auto;
+      font-size:16px;
+    }
+  </style>
 </head>
 <body>
 
-<h1>MANAGER</h1>
-<button style="background:#ff4444;color:white" onclick="resetAll()">🔄 RESET ALT</button>
+<h1>🧑‍💼 MANAGER</h1>
+
+<button class="reset" onclick="resetAll()">🔄 RESET SYSTEM</button>
+
+<h2>➕ Legg til rett</h2>
+<input id="name" placeholder="Navn">
+<input id="max" type="number" placeholder="Maks antall">
+<button onclick="addDish()">Legg til</button>
+
+<h2>📋 Retter</h2>
+<div id="menu"></div>
 
 <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
 
 <script>
-firebase.initializeApp({
-  apiKey:"AIzaSyBpCwh0JIuJphlEyCQTxhDOIdGm9fP5cg4",
-  databaseURL:"https://the-shit-3bfd8-default-rtdb.europe-west1.firebasedatabase.app"
-});
-const db=firebase.database();
+  const firebaseConfig = {
+    apiKey: "AIzaSyBpCwh0JIuJphlEyCQTxhDOIdGm9fP5cg4",
+    authDomain: "the-shit-3bfd8.firebaseapp.com",
+    databaseURL: "https://the-shit-3bfd8-default-rtdb.europe-west1.firebasedatabase.app",
+    projectId: "the-shit-3bfd8",
+    storageBucket: "the-shit-3bfd8.firebasestorage.app",
+    messagingSenderId: "831273156548",
+    appId: "1:831273156548:web:3217cdd0e76870c4af6e91"
+  };
 
-function resetAll(){
-  if(!confirm("RESETTE ALT?"))return;
-  db.ref("orders").remove();
-  db.ref("readyOrders").remove();
-  db.ref("lastNumber").set(0);
-  db.ref("menu").once("value",s=>{
-    s.forEach(c=>db.ref("menu/"+c.key+"/sold").set(0));
+  if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+  const db = firebase.database();
+
+  /* ➕ LEGG TIL RETT */
+  function addDish() {
+    const name = document.getElementById("name").value.trim();
+    const max = parseInt(document.getElementById("max").value);
+
+    if (!name || !max) {
+      alert("Fyll ut alt");
+      return;
+    }
+
+    const id = name.toLowerCase().replace(/\s+/g, "-");
+
+    db.ref("menu/" + id).set({
+      name,
+      max,
+      sold: 0,
+      created: Date.now()
+    });
+
+    document.getElementById("name").value = "";
+    document.getElementById("max").value = "";
+  }
+
+  /* 📋 VIS MENY */
+  db.ref("menu").on("value", snap => {
+    const div = document.getElementById("menu");
+    div.innerHTML = "";
+
+    snap.forEach(child => {
+      const id = child.key;
+      const d = child.val();
+      const left = d.max - d.sold;
+
+      const el = document.createElement("div");
+      el.className = "dish";
+
+      el.innerHTML = `
+        <strong>${d.name}</strong><br>
+        Solgt: ${d.sold} / ${d.max}
+        ${left <= 0 ? '<span class="soldout"> (UTSOLGT)</span>' : ''}
+        <br><br>
+
+        <div class="controls">
+          <input type="number" id="edit-${id}" value="${d.max}" style="width:80px">
+          <button onclick="updateMax('${id}')">✏️ Oppdater</button>
+          <button onclick="removeDish('${id}')">🗑️ Slett</button>
+          <button onclick="toggleStats('${id}')">📊 Stats</button>
+        </div>
+
+        <div class="stats" id="stats-${id}" style="display:none"></div>
+      `;
+
+      div.appendChild(el);
+    });
   });
-}
+
+  /* ✏️ OPPDATER MAKS */
+  function updateMax(id) {
+    const val = parseInt(document.getElementById("edit-" + id).value);
+    if (!val) return;
+    db.ref("menu/" + id + "/max").set(val);
+  }
+
+  /* 🗑️ SLETT RETT */
+  function removeDish(id) {
+    if (!confirm("Slette denne retten?")) return;
+    db.ref("menu/" + id).remove();
+  }
+
+  /* 📊 STATS */
+  function toggleStats(id) {
+    const box = document.getElementById("stats-" + id);
+    if (box.style.display === "block") {
+      box.style.display = "none";
+      return;
+    }
+
+    db.ref("menu/" + id).once("value", snap => {
+      const d = snap.val();
+      if (!d) return;
+
+      const durationMin = ((Date.now() - d.created) / 60000).toFixed(1);
+      const speed = d.sold > 0
+        ? (durationMin / d.sold).toFixed(1)
+        : "–";
+
+      let rush = "Rolig";
+      if (speed !== "–") {
+        if (speed < 1) rush = "🔥 RUSH";
+        else if (speed < 2) rush = "🟡 Travelt";
+      }
+
+      box.innerHTML = `
+        ⏱️ Tid i salg: ${durationMin} min<br>
+        📦 Solgt: ${d.sold}<br>
+        ⚡ Snitt: ${speed} min per porsjon<br>
+        📈 Tempo: ${rush}
+      `;
+
+      box.style.display = "block";
+    });
+  }
+
+  /* 🔄 RESET SYSTEM */
+  function resetAll() {
+    if (!confirm("Dette sletter ALLE aktive ordre og nullstiller menyen. Fortsette?")) return;
+
+    db.ref("orders").remove();
+    db.ref("readyOrders").remove();
+    db.ref("lastNumber").set(0);
+
+    db.ref("menu").once("value", snap => {
+      snap.forEach(child => {
+        db.ref("menu/" + child.key + "/sold").set(0);
+      });
+    });
+
+    db.ref("stats").remove();
+  }
 </script>
+
 </body>
 </html>
