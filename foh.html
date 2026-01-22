@@ -11,9 +11,21 @@ body {
   text-align:center;
   padding:40px;
 }
-.num { font-size:90px; color:#00ff99; margin:20px 0; }
-.status { font-size:24px; margin-bottom:20px; }
-select, textarea { width:80%; font-size:18px; padding:10px; margin-top:10px; }
+.num {
+  font-size:90px;
+  color:#00ff99;
+  margin:20px 0;
+}
+.status {
+  font-size:24px;
+  margin-bottom:20px;
+}
+select, textarea {
+  width:80%;
+  font-size:18px;
+  padding:10px;
+  margin-top:10px;
+}
 button {
   font-size:26px;
   padding:15px 35px;
@@ -23,31 +35,47 @@ button {
   background:#00ff99;
   cursor:pointer;
 }
-.undo { background:#ffcc00; color:black; }
+.undo {
+  background:#ffcc00;
+  color:black;
+}
 </style>
 </head>
 <body>
 
 <h1>FOH</h1>
+
 <div class="status" id="status">Status: –</div>
 <div class="num" id="num">–</div>
 
-<select id="dish"></select><br><br>
+<select id="dish"></select>
 
-<label><input type="checkbox" id="allergy"> ⚠️ ALLERGI</label><br><br>
-<textarea id="note" placeholder="Notat…"></textarea><br>
+<br><br>
 
-<button onclick="newOrder()">NY ORDRE</button><br>
+<label>
+  <input type="checkbox" id="allergy">
+  ⚠️ ALLERGI
+</label>
+
+<br><br>
+
+<textarea id="note" placeholder="Uten løk / uten saus / annet…"></textarea>
+
+<br>
+<button onclick="newOrder()">NY ORDRE</button>
+<br>
 <button class="undo" onclick="undoLast()">↩️ UNDO</button>
 
 <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
 
 <script>
+/* 🔥 FIREBASE */
 var firebaseConfig = {
   apiKey: "AIzaSyBpCwh0JIuJphlEyCQTxhDOIdGm9fP5cg4",
   databaseURL: "https://the-shit-3bfd8-default-rtdb.europe-west1.firebasedatabase.app"
 };
+
 if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
 
@@ -55,6 +83,7 @@ let menu = {};
 let lastOrderId = null;
 let lastDishId = null;
 
+/* 🍔 HENT MENY */
 db.ref("menu").on("value", snap => {
   const sel = document.getElementById("dish");
   sel.innerHTML = "";
@@ -75,51 +104,74 @@ db.ref("menu").on("value", snap => {
     opt.disabled = left <= 0;
     sel.appendChild(opt);
   });
+
+  if (sel.options.length > 0 && !sel.value) {
+    sel.selectedIndex = 0;
+  }
 });
 
+/* 🆕 NY ORDRE */
 function newOrder() {
-  const dishId = dish.value;
+  const dishSelect = document.getElementById("dish");
+  const dishId = dishSelect.value;
   const dish = menu[dishId];
-  if (!dish) return;
+
+  if (!dish) {
+    alert("Ingen rett valgt");
+    return;
+  }
 
   db.ref("lastNumber").transaction(n => (n || 0) + 1, (err, ok, snap) => {
-    if (!ok) return;
+    if (!ok) {
+      alert("Kunne ikke opprette ordre");
+      return;
+    }
+
     const num = snap.val();
 
     db.ref("orders/" + num).set({
       dish: dish.name,
-      allergy: allergy.checked,
-      note: note.value,
+      allergy: document.getElementById("allergy").checked,
+      note: document.getElementById("note").value,
       time: Date.now()
     });
 
-    db.ref("menu/" + dishId + "/sold").transaction(n => (n || 0) + 1);
+    db.ref("menu/" + dishId + "/sold")
+      .transaction(n => (n || 0) + 1);
 
     lastOrderId = num;
     lastDishId = dishId;
 
-    numEl.innerText = num;
-    allergy.checked = false;
-    note.value = "";
+    document.getElementById("num").innerText = num;
+    document.getElementById("allergy").checked = false;
+    document.getElementById("note").value = "";
   });
 }
 
+/* ↩️ UNDO SISTE */
 function undoLast() {
-  if (!lastOrderId) return alert("Ingen ordre å angre");
+  if (!lastOrderId || !lastDishId) {
+    alert("Ingen ordre å angre");
+    return;
+  }
+
   db.ref("orders/" + lastOrderId).remove();
   db.ref("menu/" + lastDishId + "/sold")
     .transaction(n => Math.max((n || 1) - 1, 0));
+
   lastOrderId = null;
   lastDishId = null;
 }
 
+/* 📊 STATUS */
 db.ref("orders").on("value", snap => {
-  const c = snap.numChildren();
+  const count = snap.numChildren();
   let s = "🟢 Rolig";
-  if (c >= 4) s = "🟡 Kø";
-  if (c >= 7) s = "🔴 Rush";
-  status.innerText = "Status: " + s;
+  if (count >= 4) s = "🟡 Kø";
+  if (count >= 7) s = "🔴 Rush";
+  document.getElementById("status").innerText = "Status: " + s;
 });
 </script>
+
 </body>
 </html>
