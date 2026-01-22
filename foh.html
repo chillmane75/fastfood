@@ -125,40 +125,52 @@ db.ref("menu").on("value", snap => {
 
 /* 🆕 NY ORDRE */
 function newOrder() {
-  const dishSelect = document.getElementById("dish");
-  const dishId = dishSelect.value;
-  const dish = menu[dishId];
-
-  if (!dish) {
+  const dishId = document.getElementById("dish").value;
+  if (!dishId) {
     alert("Ingen rett valgt");
     return;
   }
 
-  db.ref("lastNumber").transaction(n => (n || 0) + 1, (err, ok, snap) => {
-    if (!ok || !snap.exists()) {
-      alert("Kunne ikke opprette ordre");
+  // 1️⃣ Først: prøv å øke sold ATOMISK
+  db.ref("menu/" + dishId).transaction(dish => {
+    if (!dish) return;
+
+    // STOPP hvis utsolgt
+    if (dish.sold >= dish.max) {
+      return; // avbryt transaction
+    }
+
+    dish.sold += 1;
+    return dish;
+  }, (err, committed, snap) => {
+    if (!committed) {
+      alert("❌ Denne retten er utsolgt");
       return;
     }
 
-    const num = Number(snap.val());
+    // 2️⃣ Kun hvis vi faktisk fikk solgt én
+    db.ref("lastNumber").transaction(n => (n || 0) + 1, (e, ok, numSnap) => {
+      if (!ok) return;
 
-    db.ref("orders/" + num).set({
-      dish: dish.name,
-      allergy: document.getElementById("allergy").checked,
-      note: document.getElementById("note").value,
-      time: Date.now()
+      const num = Number(numSnap.val());
+      const dish = snap.val();
+
+      db.ref("orders/" + num).set({
+        dish: dish.name,
+        allergy: document.getElementById("allergy").checked,
+        note: document.getElementById("note").value,
+        time: Date.now()
+      });
+
+      lastOrderId = num;
+      lastDishId = dishId;
+
+      document.getElementById("allergy").checked = false;
+      document.getElementById("note").value = "";
     });
-
-    db.ref("menu/" + dishId + "/sold")
-      .transaction(n => (n || 0) + 1);
-
-    lastOrderId = num;
-    lastDishId = dishId;
-
-    document.getElementById("allergy").checked = false;
-    document.getElementById("note").value = "";
   });
 }
+
 
 /* ↩️ UNDO – EKTE ROLLBACK */
 function undoLast() {
@@ -200,3 +212,4 @@ db.ref("orders").on("value", snap => {
 
 </body>
 </html>
+
