@@ -155,13 +155,29 @@ function undoLast() {
     return;
   }
 
+  // 1. Slett ordren
   db.ref("orders/" + lastOrderId).remove();
+
+  // 2. Trekk tilbake solgt-teller
   db.ref("menu/" + lastDishId + "/sold")
     .transaction(n => Math.max((n || 1) - 1, 0));
+
+  // 3. Rull tilbake ordrenummeret (KUN siste)
+  db.ref("lastNumber").transaction(n => {
+    if (n === lastOrderId) {
+      return n - 1;
+    }
+    return n;
+  }, (err, ok, snap) => {
+    if (ok && snap.exists()) {
+      document.getElementById("num").innerText = snap.val();
+    }
+  });
 
   lastOrderId = null;
   lastDishId = null;
 }
+
 
 /* 📊 STATUS */
 db.ref("orders").on("value", snap => {
@@ -175,3 +191,4 @@ db.ref("orders").on("value", snap => {
 
 </body>
 </html>
+
