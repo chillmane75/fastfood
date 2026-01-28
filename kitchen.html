@@ -25,14 +25,8 @@ body {
 .yellow{background:#4a4a1e;}
 .red{background:#4a1e1e;}
 
-.allergy {
-  color:#ff4444;
-  font-weight:bold;
-}
-
-.note {
-  font-size:20px;
-}
+.allergy { color:#ff4444; font-weight:bold; }
+.note { font-size:20px; }
 
 .addons {
   margin-top:8px;
@@ -61,19 +55,26 @@ const db = firebase.database();
 
 let addonMap = {};
 
-/* 🔎 HENT ADD-ONS (ID → NAVN) */
+/* 🔎 ADD-ONS */
 db.ref("addons").on("value", snap => {
   addonMap = {};
+  if (!snap.exists()) return;
   snap.forEach(c => addonMap[c.key] = c.val().name);
 });
 
-/* 📋 ORDRE */
+/* 📋 ORDRE (RESET-SIKKER) */
 db.ref("orders").on("value", snap => {
-  orders.innerHTML = "";
+  const container = document.getElementById("orders");
+  container.innerHTML = "";
+
+  if (!snap.exists()) return; // ← KRITISK
+
   const now = Date.now();
 
   snap.forEach(child => {
     const o = child.val();
+    if (!o) return;
+
     const age = now - o.time;
     let c = "green";
     if (age > 240000) c = "red";
@@ -86,11 +87,7 @@ db.ref("orders").on("value", snap => {
         .filter(Boolean);
 
       if (list.length) {
-        addonsHtml = `
-          <div class="addons">
-            ➕ ${list.join(" • ")}
-          </div>
-        `;
+        addonsHtml = `<div class="addons">➕ ${list.join(" • ")}</div>`;
       }
     }
 
@@ -104,13 +101,13 @@ db.ref("orders").on("value", snap => {
       ${o.note ? `<div class="note">📝 ${o.note}</div>` : ''}
       <button onclick="done(${child.key})">FERDIG</button>
     `;
-    orders.appendChild(d);
+    container.appendChild(d);
   });
 });
 
 function done(num){
   db.ref("orders/"+num).once("value", s=>{
-    if(!s.val())return;
+    if(!s.exists()) return;
     db.ref("readyOrders/"+num).set({...s.val(),readyTime:Date.now()});
     db.ref("orders/"+num).remove();
   });
