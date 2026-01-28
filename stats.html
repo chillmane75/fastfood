@@ -11,22 +11,40 @@ body {
   padding:30px;
 }
 
-h1, h2 { text-align:center; }
+h1, h2 {
+  text-align:center;
+}
 
-button {
-  font-size:18px;
-  padding:10px 20px;
-  margin:10px;
-  border:none;
+.section {
+  background:#1a1a1a;
+  padding:15px;
+  margin:20px 0;
   border-radius:8px;
-  cursor:pointer;
+}
+
+input, button {
+  font-size:16px;
+  padding:6px;
+  margin:4px;
 }
 
 .reset {
   background:#ff4444;
   color:white;
+  border:none;
+  border-radius:8px;
+  padding:10px 16px;
+  cursor:pointer;
   display:block;
-  margin:0 auto 30px auto;
+  margin:0 auto 25px auto;
+  font-size:16px;
+}
+
+.item {
+  background:#222;
+  padding:10px;
+  margin:8px 0;
+  border-radius:6px;
 }
 </style>
 </head>
@@ -35,6 +53,25 @@ button {
 <h1>📊 STATS / MANAGER</h1>
 
 <button class="reset" onclick="resetAll()">🔄 RESET SYSTEM</button>
+
+<div class="section">
+  <h2>➕ Legg til rett</h2>
+  <input id="dishName" placeholder="Navn">
+  <input id="dishMax" type="number" placeholder="Maks">
+  <button onclick="addDish()">Legg til</button>
+</div>
+
+<div class="section">
+  <h2>📋 Retter</h2>
+  <div id="menu"></div>
+</div>
+
+<div class="section">
+  <h2>➕ Add-ons</h2>
+  <input id="addonName" placeholder="Add-on navn">
+  <button onclick="addAddon()">Legg til</button>
+  <div id="addons"></div>
+</div>
 
 <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
@@ -48,9 +85,71 @@ const firebaseConfig = {
 if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
 
-/*
-  🔥 HARD RESET – EN KALL, INGEN RACE CONDITIONS
-*/
+/* ➕ RETTER */
+function addDish() {
+  const name = dishName.value.trim();
+  const max = parseInt(dishMax.value);
+  if (!name || !max) return;
+
+  const id = name.toLowerCase().replace(/\s+/g, "-");
+  db.ref("menu/" + id).set({
+    name,
+    max,
+    sold: 0,
+    created: Date.now()
+  });
+
+  dishName.value = "";
+  dishMax.value = "";
+}
+
+db.ref("menu").on("value", snap => {
+  menu.innerHTML = "";
+  snap.forEach(c => {
+    const d = c.val();
+    const el = document.createElement("div");
+    el.className = "item";
+    el.innerHTML = `
+      <strong>${d.name}</strong><br>
+      Solgt: ${d.sold} / ${d.max}
+    `;
+    menu.appendChild(el);
+  });
+});
+
+/* ➕ ADD-ONS */
+function addAddon() {
+  const name = addonName.value.trim();
+  if (!name) return;
+
+  const id = name.toLowerCase().replace(/\s+/g, "-");
+  db.ref("addons/" + id).set({
+    name,
+    created: Date.now()
+  });
+
+  addonName.value = "";
+}
+
+db.ref("addons").on("value", snap => {
+  addons.innerHTML = "";
+  snap.forEach(c => {
+    const el = document.createElement("div");
+    el.className = "item";
+    el.innerHTML = `
+      🌿 ${c.val().name}
+      <button onclick="removeAddon('${c.key}')">🗑️</button>
+    `;
+    addons.appendChild(el);
+  });
+});
+
+function removeAddon(id) {
+  if (!confirm("Slette add-on?")) return;
+  db.ref("addons/" + id).remove();
+}
+
+/* 🔄 RESET – FULL */
 function resetAll() {
   if (!confirm("Dette sletter ALT og nullstiller systemet. Fortsette?")) return;
 
@@ -60,9 +159,7 @@ function resetAll() {
     orders: {},
     readyOrders: {},
     lastNumber: 0
-  })
-  .then(() => alert("✅ System reset ferdig"))
-  .catch(err => alert("❌ Reset feilet: " + err.message));
+  });
 }
 </script>
 
