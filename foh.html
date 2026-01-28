@@ -7,21 +7,13 @@
 body {
   background:#111;
   color:white;
-  font-family:Arial, sans-serif;
+  font-family:Arial;
   text-align:center;
   padding:40px;
 }
 
-.num {
-  font-size:90px;
-  color:#00ff99;
-  margin:20px 0;
-}
-
-.status {
-  font-size:24px;
-  margin-bottom:20px;
-}
+.num { font-size:90px; color:#00ff99; margin:20px 0; }
+.status { font-size:24px; margin-bottom:20px; }
 
 select, textarea {
   width:80%;
@@ -40,33 +32,36 @@ button {
   cursor:pointer;
 }
 
-.undo {
-  background:#ffcc00;
-  color:black;
-}
+.undo { background:#ffcc00; color:black; }
 
 .addons {
   display:grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap:14px;
-  max-width:600px;
+  grid-template-columns: repeat(auto-fit, minmax(200px,1fr));
+  gap:16px;
+  max-width:700px;
   margin:25px auto;
 }
 
 .addon-btn {
+  padding:22px;
+  border-radius:16px;
+  font-size:22px;
   background:#222;
   border:3px solid #333;
-  border-radius:14px;
-  padding:20px;
-  font-size:22px;
   cursor:pointer;
-  user-select:none;
 }
 
 .addon-btn.active {
   background:#00ff99;
   color:black;
   border-color:#00ff99;
+}
+
+.addon-btn.disabled {
+  background:#333;
+  color:#777;
+  border-color:#444;
+  cursor:not-allowed;
 }
 </style>
 </head>
@@ -81,12 +76,9 @@ button {
 
 <div class="addons" id="addons"></div>
 
-<label>
-  <input type="checkbox" id="allergy"> ⚠️ ALLERGI
-</label>
+<label><input type="checkbox" id="allergy"> ⚠️ ALLERGI</label>
 
 <br><br>
-
 <textarea id="note" placeholder="Uten løk / uten saus / annet…"></textarea>
 
 <br>
@@ -106,9 +98,7 @@ if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
 
 let selectedAddons = {};
-let lastOrderId = null;
-let lastDishId = null;
-let busy = false;
+let lastOrderId=null, lastDishId=null, busy=false;
 
 /* NUMMER */
 db.ref("lastNumber").on("value", s=>{
@@ -121,8 +111,7 @@ db.ref("menu").on("value", snap=>{
   snap.forEach(c=>{
     if(c.val().sold < c.val().max){
       const o=document.createElement("option");
-      o.value=c.key;
-      o.text=c.val().name;
+      o.value=c.key; o.text=c.val().name;
       dish.appendChild(o);
     }
   });
@@ -134,13 +123,20 @@ db.ref("addons").on("value", snap=>{
   selectedAddons={};
 
   snap.forEach(c=>{
+    const a=c.val();
+    const left=a.max-a.sold;
     const b=document.createElement("div");
-    b.className="addon-btn";
-    b.innerText=c.val().name;
-    b.onclick=()=>{
-      b.classList.toggle("active");
-      selectedAddons[c.key]=b.classList.contains("active");
-    };
+
+    b.className="addon-btn"+(left<=0?" disabled":"");
+    b.innerText=a.name+(left<=0?" (UTSOLGT)":"");
+
+    if(left>0){
+      b.onclick=()=>{
+        b.classList.toggle("active");
+        selectedAddons[c.key]=b.classList.contains("active");
+      };
+    }
+
     addons.appendChild(b);
   });
 });
@@ -149,7 +145,6 @@ db.ref("addons").on("value", snap=>{
 function newOrder(){
   if(busy) return;
   busy=true; orderBtn.disabled=true;
-
   const dishId=dish.value;
 
   db.ref("menu/"+dishId).transaction(d=>{
@@ -162,6 +157,12 @@ function newOrder(){
       const addonsOut={};
       Object.keys(selectedAddons).forEach(k=>{
         if(selectedAddons[k]) addonsOut[k]=true;
+      });
+
+      // øk sold på add-ons
+      Object.keys(addonsOut).forEach(id=>{
+        db.ref("addons/"+id+"/sold")
+          .transaction(n=>n+1);
       });
 
       db.ref("orders/"+nr.val()).set({
@@ -187,6 +188,15 @@ function newOrder(){
 
 function undoLast(){
   if(!lastOrderId) return;
+  db.ref("orders/"+lastOrderId).once("value", s=>{
+    const o=s.val();
+    if(o?.addons){
+      Object.keys(o.addons).forEach(id=>{
+        db.ref("addons/"+id+"/sold")
+          .transaction(n=>Math.max(n-1,0));
+      });
+    }
+  });
   db.ref("orders/"+lastOrderId).remove();
   db.ref("menu/"+lastDishId+"/sold")
     .transaction(n=>Math.max(n-1,0));
@@ -195,9 +205,7 @@ function undoLast(){
   lastOrderId=null; lastDishId=null;
 }
 
-function reset(){
-  busy=false; orderBtn.disabled=false;
-}
+function reset(){ busy=false; orderBtn.disabled=false; }
 </script>
 
 </body>
