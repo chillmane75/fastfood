@@ -11,9 +11,7 @@ body {
   padding:30px;
 }
 
-h1, h2 {
-  text-align:center;
-}
+h1, h2 { text-align:center; }
 
 .section {
   background:#1a1a1a;
@@ -46,6 +44,7 @@ input, button {
   margin:8px 0;
   border-radius:6px;
 }
+.soldout { color:#ff5555; font-weight:bold; }
 </style>
 </head>
 <body>
@@ -69,6 +68,7 @@ input, button {
 <div class="section">
   <h2>➕ Add-ons</h2>
   <input id="addonName" placeholder="Add-on navn">
+  <input id="addonMax" type="number" placeholder="Maks">
   <button onclick="addAddon()">Legg til</button>
   <div id="addons"></div>
 </div>
@@ -85,7 +85,7 @@ const firebaseConfig = {
 if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
 
-/* ➕ RETTER */
+/* RETTER */
 function addDish() {
   const name = dishName.value.trim();
   const max = parseInt(dishMax.value);
@@ -93,10 +93,7 @@ function addDish() {
 
   const id = name.toLowerCase().replace(/\s+/g, "-");
   db.ref("menu/" + id).set({
-    name,
-    max,
-    sold: 0,
-    created: Date.now()
+    name, max, sold: 0, created: Date.now()
   });
 
   dishName.value = "";
@@ -107,58 +104,54 @@ db.ref("menu").on("value", snap => {
   menu.innerHTML = "";
   snap.forEach(c => {
     const d = c.val();
+    const left = d.max - d.sold;
     const el = document.createElement("div");
     el.className = "item";
     el.innerHTML = `
       <strong>${d.name}</strong><br>
-      Solgt: ${d.sold} / ${d.max}
+      ${d.sold} / ${d.max}
+      ${left <= 0 ? '<span class="soldout"> UTSOLGT</span>' : ''}
     `;
     menu.appendChild(el);
   });
 });
 
-/* ➕ ADD-ONS */
+/* ADD-ONS */
 function addAddon() {
   const name = addonName.value.trim();
-  if (!name) return;
+  const max = parseInt(addonMax.value);
+  if (!name || !max) return;
 
   const id = name.toLowerCase().replace(/\s+/g, "-");
   db.ref("addons/" + id).set({
-    name,
-    created: Date.now()
+    name, max, sold: 0, created: Date.now()
   });
 
   addonName.value = "";
+  addonMax.value = "";
 }
 
 db.ref("addons").on("value", snap => {
   addons.innerHTML = "";
   snap.forEach(c => {
+    const a = c.val();
+    const left = a.max - a.sold;
     const el = document.createElement("div");
     el.className = "item";
     el.innerHTML = `
-      🌿 ${c.val().name}
-      <button onclick="removeAddon('${c.key}')">🗑️</button>
+      🌿 ${a.name}<br>
+      ${a.sold} / ${a.max}
+      ${left <= 0 ? '<span class="soldout"> UTSOLGT</span>' : ''}
     `;
     addons.appendChild(el);
   });
 });
 
-function removeAddon(id) {
-  if (!confirm("Slette add-on?")) return;
-  db.ref("addons/" + id).remove();
-}
-
-/* 🔄 RESET – FULL */
+/* RESET */
 function resetAll() {
   if (!confirm("Dette sletter ALT og nullstiller systemet. Fortsette?")) return;
-
   db.ref().set({
-    menu: {},
-    addons: {},
-    orders: {},
-    readyOrders: {},
-    lastNumber: 0
+    menu:{}, addons:{}, orders:{}, readyOrders:{}, lastNumber:0
   });
 }
 </script>
