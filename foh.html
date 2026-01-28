@@ -44,6 +44,11 @@ button {
   background:#ffcc00;
   color:black;
 }
+
+.addons {
+  margin-top:20px;
+  font-size:20px;
+}
 </style>
 </head>
 <body>
@@ -56,6 +61,15 @@ button {
 <select id="dish"></select>
 
 <br><br>
+
+<div class="addons">
+  <label>
+    <input type="checkbox" id="addon-chimi">
+    🌿 Chimichurri
+  </label>
+</div>
+
+<br>
 
 <label>
   <input type="checkbox" id="allergy">
@@ -75,7 +89,6 @@ button {
 <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
 
 <script>
-/* 🔥 FIREBASE */
 var firebaseConfig = {
   apiKey: "AIzaSyBpCwh0JIuJphlEyCQTxhDOIdGm9fP5cg4",
   databaseURL: "https://the-shit-3bfd8-default-rtdb.europe-west1.firebasedatabase.app"
@@ -84,20 +97,17 @@ var firebaseConfig = {
 if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
 
-/* STATE */
 let menu = {};
 let lastOrderId = null;
 let lastDishId = null;
 let busy = false;
 
-/* 🔢 ALLTID VIS lastNumber FRA DB */
 db.ref("lastNumber").on("value", snap => {
   const val = snap.val();
   document.getElementById("num").innerText =
     typeof val === "number" ? val : "–";
 });
 
-/* 🍔 HENT MENY */
 db.ref("menu").on("value", snap => {
   const sel = document.getElementById("dish");
   sel.innerHTML = "";
@@ -118,94 +128,63 @@ db.ref("menu").on("value", snap => {
     opt.disabled = left <= 0;
     sel.appendChild(opt);
   });
-
-  if (sel.options.length > 0 && !sel.value) {
-    sel.selectedIndex = 0;
-  }
 });
 
-/* 🆕 NY ORDRE – ATOMISK UTSOLGT-SJEKK */
 function newOrder() {
   if (busy) return;
   busy = true;
   document.getElementById("orderBtn").disabled = true;
 
   const dishId = document.getElementById("dish").value;
-  if (!dishId) {
-    resetBusy();
-    return;
-  }
+  if (!dishId) return resetBusy();
 
-  // 1️⃣ Øk sold ATOMISK – stopp hvis utsolgt
   db.ref("menu/" + dishId).transaction(dish => {
-    if (!dish) return;
-    if (dish.sold >= dish.max) return;
+    if (!dish || dish.sold >= dish.max) return;
     dish.sold += 1;
     return dish;
   }, (err, committed, snap) => {
     if (!committed) {
-      alert("❌ Denne retten er utsolgt");
-      resetBusy();
-      return;
+      alert("❌ Utsolgt");
+      return resetBusy();
     }
 
-    // 2️⃣ Kun hvis vi faktisk fikk solgt → nytt nummer
     db.ref("lastNumber").transaction(n => (n || 0) + 1, (e, ok, numSnap) => {
-      if (!ok) {
-        rollbackSold(dishId);
-        resetBusy();
-        return;
+      if (!ok) return resetBusy();
+
+      const addons = {};
+      if (document.getElementById("addon-chimi").checked) {
+        addons.chimichurri = true;
       }
 
-      const num = Number(numSnap.val());
-      const dish = snap.val();
-
-      db.ref("orders/" + num).set({
-        dish: dish.name,
+      db.ref("orders/" + numSnap.val()).set({
+        dish: snap.val().name,
         allergy: document.getElementById("allergy").checked,
         note: document.getElementById("note").value,
+        addons: addons,
         time: Date.now()
       });
 
-      lastOrderId = num;
+      lastOrderId = numSnap.val();
       lastDishId = dishId;
 
       document.getElementById("allergy").checked = false;
       document.getElementById("note").value = "";
+      document.getElementById("addon-chimi").checked = false;
+
       resetBusy();
     });
   });
 }
 
-/* ↩️ UNDO – EKTE ROLLBACK */
 function undoLast() {
-  if (lastOrderId === null || lastDishId === null) {
-    alert("Ingen ordre å angre");
-    return;
-  }
+  if (lastOrderId === null) return;
 
-  const orderId = Number(lastOrderId);
-
-  // 1️⃣ Slett ordren
-  db.ref("orders/" + orderId).remove();
-
-  // 2️⃣ Rull tilbake solgt
-  rollbackSold(lastDishId);
-
-  // 3️⃣ Rull tilbake nummer KUN hvis siste
-  db.ref("lastNumber").transaction(n => {
-    if (Number(n) === orderId) return n - 1;
-    return n;
-  });
+  db.ref("orders/" + lastOrderId).remove();
+  db.ref("menu/" + lastDishId + "/sold").transaction(n => Math.max(n - 1, 0));
+  db.ref("lastNumber").transaction(n => n === lastOrderId ? n - 1 : n);
 
   lastOrderId = null;
   lastDishId = null;
-}
-
-/* 🔁 HJELPEFUNKSJONER */
-function rollbackSold(dishId) {
-  db.ref("menu/" + dishId + "/sold")
-    .transaction(n => Math.max(n - 1, 0));
 }
 
 function resetBusy() {
@@ -213,7 +192,6 @@ function resetBusy() {
   document.getElementById("orderBtn").disabled = false;
 }
 
-/* 📊 STATUS */
 db.ref("orders").on("value", snap => {
   const count = snap.numChildren();
   let s = "🟢 Rolig";
