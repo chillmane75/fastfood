@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Manager</title>
+<title>Stats / Manager</title>
 <style>
 body {
   background:#111;
@@ -11,80 +11,30 @@ body {
   padding:30px;
 }
 
-h1, h2 {
-  text-align:center;
-}
+h1, h2 { text-align:center; }
 
-input, button {
-  font-size:16px;
-  padding:6px;
-  margin:4px;
-}
-
-.section {
-  background:#1a1a1a;
-  padding:15px;
-  margin:20px 0;
+button {
+  font-size:18px;
+  padding:10px 20px;
+  margin:10px;
+  border:none;
   border-radius:8px;
-}
-
-.dish {
-  background:#222;
-  padding:15px;
-  margin:12px 0;
-  border-radius:8px;
-}
-
-.soldout {
-  color:#ff4444;
-  font-weight:bold;
+  cursor:pointer;
 }
 
 .reset {
   background:#ff4444;
   color:white;
-  border:none;
-  border-radius:8px;
-  padding:10px 16px;
-  cursor:pointer;
   display:block;
-  margin:0 auto 25px auto;
-  font-size:16px;
-}
-
-.addon {
-  padding:10px;
-  background:#222;
-  margin:8px 0;
-  border-radius:6px;
+  margin:0 auto 30px auto;
 }
 </style>
 </head>
 <body>
 
-<h1>🧑‍💼 MANAGER</h1>
+<h1>📊 STATS / MANAGER</h1>
 
 <button class="reset" onclick="resetAll()">🔄 RESET SYSTEM</button>
-
-<div class="section">
-  <h2>➕ Legg til rett</h2>
-  <input id="name" placeholder="Navn">
-  <input id="max" type="number" placeholder="Maks antall">
-  <button onclick="addDish()">Legg til</button>
-</div>
-
-<div class="section">
-  <h2>➕ Legg til add-on</h2>
-  <input id="addonName" placeholder="Add-on navn (f.eks. Chimichurri)">
-  <button onclick="addAddon()">Legg til add-on</button>
-
-  <div id="addons"></div>
-</div>
-
-<div class="section">
-  <h2>📋 Retter</h2>
-  <div id="menu"></div>
-</div>
 
 <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
@@ -98,94 +48,21 @@ const firebaseConfig = {
 if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
 
-/* ➕ LEGG TIL RETT */
-function addDish() {
-  const name = document.getElementById("name").value.trim();
-  const max = parseInt(document.getElementById("max").value);
-
-  if (!name || !max) return alert("Fyll ut alt");
-
-  const id = name.toLowerCase().replace(/\s+/g, "-");
-
-  db.ref("menu/" + id).set({
-    name,
-    max,
-    sold: 0,
-    created: Date.now()
-  });
-
-  document.getElementById("name").value = "";
-  document.getElementById("max").value = "";
-}
-
-/* ➕ ADD-ONS */
-function addAddon() {
-  const name = document.getElementById("addonName").value.trim();
-  if (!name) return;
-
-  const id = name.toLowerCase().replace(/\s+/g, "-");
-
-  db.ref("addons/" + id).set({
-    name,
-    created: Date.now()
-  });
-
-  document.getElementById("addonName").value = "";
-}
-
-db.ref("addons").on("value", snap => {
-  const div = document.getElementById("addons");
-  div.innerHTML = "";
-
-  snap.forEach(child => {
-    const a = child.val();
-    const el = document.createElement("div");
-    el.className = "addon";
-    el.innerHTML = `
-      🌿 ${a.name}
-      <button onclick="removeAddon('${child.key}')">🗑️</button>
-    `;
-    div.appendChild(el);
-  });
-});
-
-function removeAddon(id) {
-  if (!confirm("Slette add-on?")) return;
-  db.ref("addons/" + id).remove();
-}
-
-/* 📋 VIS MENY */
-db.ref("menu").on("value", snap => {
-  const div = document.getElementById("menu");
-  div.innerHTML = "";
-
-  snap.forEach(child => {
-    const d = child.val();
-    const left = d.max - d.sold;
-
-    const el = document.createElement("div");
-    el.className = "dish";
-
-    el.innerHTML = `
-      <strong>${d.name}</strong><br>
-      Solgt: ${d.sold} / ${d.max}
-      ${left <= 0 ? '<span class="soldout"> (UTSOLGT)</span>' : ''}
-    `;
-
-    div.appendChild(el);
-  });
-});
-
-/* 🔄 RESET */
+/*
+  🔥 HARD RESET – EN KALL, INGEN RACE CONDITIONS
+*/
 function resetAll() {
-  if (!confirm("Dette nullstiller ALT. Fortsette?")) return;
+  if (!confirm("Dette sletter ALT og nullstiller systemet. Fortsette?")) return;
 
-  db.ref("orders").remove();
-  db.ref("readyOrders").remove();
-  db.ref("lastNumber").set(0);
-  db.ref("menu").once("value", s => {
-    s.forEach(c => db.ref("menu/"+c.key+"/sold").set(0));
-  });
+  db.ref().set({
+    menu: {},
+    addons: {},
+    orders: {},
+    readyOrders: {},
+    lastNumber: 0
+  })
+  .then(() => alert("✅ System reset ferdig"))
+  .catch(err => alert("❌ Reset feilet: " + err.message));
 }
 </script>
 
