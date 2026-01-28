@@ -4,11 +4,41 @@
 <meta charset="UTF-8">
 <title>Kjøkken</title>
 <style>
-body { background:#000; color:white; font-family:Arial; text-align:center; padding:30px; }
-.order { padding:20px; margin:12px auto; border-radius:10px; font-size:26px; max-width:650px; text-align:left; }
-.green{background:#1e3d2f;} .yellow{background:#4a4a1e;} .red{background:#4a1e1e;}
-.allergy{color:#ff4444;font-weight:bold;}
-.note{font-size:20px;}
+body {
+  background:#000;
+  color:white;
+  font-family:Arial;
+  text-align:center;
+  padding:30px;
+}
+
+.order {
+  padding:20px;
+  margin:12px auto;
+  border-radius:10px;
+  font-size:26px;
+  max-width:650px;
+  text-align:left;
+}
+
+.green{background:#1e3d2f;}
+.yellow{background:#4a4a1e;}
+.red{background:#4a1e1e;}
+
+.allergy {
+  color:#ff4444;
+  font-weight:bold;
+}
+
+.note {
+  font-size:20px;
+}
+
+.addon {
+  font-size:20px;
+  margin-top:6px;
+  color:#00ff99;
+}
 </style>
 </head>
 <body>
@@ -37,12 +67,18 @@ db.ref("orders").on("value", snap => {
     if (age > 240000) c = "red";
     else if (age > 120000) c = "yellow";
 
+    let addonsHtml = "";
+    if (o.addons && o.addons.chimichurri) {
+      addonsHtml += `<div class="addon">🌿 Chimichurri</div>`;
+    }
+
     const d = document.createElement("div");
     d.className = `order ${c}`;
     d.innerHTML = `
       <strong>ORDRE ${child.key}</strong>
       <div style="font-size:24px;margin-top:4px;">🍔 ${o.dish}</div>
       ${o.allergy ? '<div class="allergy">⚠️ ALLERGI</div>' : ''}
+      ${addonsHtml}
       ${o.note ? `<div class="note">📝 ${o.note}</div>` : ''}
       <button onclick="done(${child.key})">FERDIG</button>
     `;
@@ -58,5 +94,6 @@ function done(num){
   });
 }
 </script>
+
 </body>
 </html>
