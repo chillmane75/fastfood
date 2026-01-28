@@ -43,6 +43,11 @@ body {
 <h1>KJØKKEN</h1>
 <div id="orders"></div>
 
+<!-- 🔔 LYD: BRUKER EKSISTERENDE order-up.mp3 -->
+<audio id="newOrderSound" preload="auto">
+  <source src="order-up.mp3" type="audio/mpeg">
+</audio>
+
 <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
 
@@ -53,7 +58,12 @@ firebase.initializeApp({
 });
 const db = firebase.database();
 
+const ordersDiv = document.getElementById("orders");
+const sound = document.getElementById("newOrderSound");
+
 let addonMap = {};
+let seenOrders = new Set();
+let initialLoadDone = false;
 
 /* 🔎 ADD-ONS */
 db.ref("addons").on("value", snap => {
@@ -62,53 +72,65 @@ db.ref("addons").on("value", snap => {
   snap.forEach(c => addonMap[c.key] = c.val().name);
 });
 
-/* 📋 ORDRE (RESET-SIKKER) */
+/* 📋 ORDRE + LYDLOGIKK */
 db.ref("orders").on("value", snap => {
-  const container = document.getElementById("orders");
-  container.innerHTML = "";
-
-  if (!snap.exists()) return; // ← KRITISK
+  ordersDiv.innerHTML = "";
 
   const now = Date.now();
+  const currentIds = new Set();
 
-  snap.forEach(child => {
-    const o = child.val();
-    if (!o) return;
+  if (snap.exists()) {
+    snap.forEach(child => {
+      const id = child.key;
+      const o = child.val();
+      currentIds.add(id);
 
-    const age = now - o.time;
-    let c = "green";
-    if (age > 240000) c = "red";
-    else if (age > 120000) c = "yellow";
-
-    let addonsHtml = "";
-    if (o.addons) {
-      const list = Object.keys(o.addons)
-        .map(id => addonMap[id])
-        .filter(Boolean);
-
-      if (list.length) {
-        addonsHtml = `<div class="addons">➕ ${list.join(" • ")}</div>`;
+      // 🔔 Kun lyd på NY ordre (ikke ved refresh)
+      if (initialLoadDone && !seenOrders.has(id)) {
+        try {
+          sound.pause();
+          sound.currentTime = 0;
+          sound.play();
+        } catch (e) {}
       }
-    }
 
-    const d = document.createElement("div");
-    d.className = `order ${c}`;
-    d.innerHTML = `
-      <strong>ORDRE ${child.key}</strong>
-      <div style="font-size:24px;margin-top:4px;">🍔 ${o.dish}</div>
-      ${o.allergy ? '<div class="allergy">⚠️ ALLERGI</div>' : ''}
-      ${addonsHtml}
-      ${o.note ? `<div class="note">📝 ${o.note}</div>` : ''}
-      <button onclick="done(${child.key})">FERDIG</button>
-    `;
-    container.appendChild(d);
-  });
+      const age = now - o.time;
+      let c = "green";
+      if (age > 240000) c = "red";
+      else if (age > 120000) c = "yellow";
+
+      let addonsHtml = "";
+      if (o.addons) {
+        const list = Object.keys(o.addons)
+          .map(aid => addonMap[aid])
+          .filter(Boolean);
+        if (list.length) {
+          addonsHtml = `<div class="addons">➕ ${list.join(" • ")}</div>`;
+        }
+      }
+
+      const el = document.createElement("div");
+      el.className = `order ${c}`;
+      el.innerHTML = `
+        <strong>ORDRE ${id}</strong>
+        <div style="font-size:24px;margin-top:4px;">🍔 ${o.dish}</div>
+        ${o.allergy ? '<div class="allergy">⚠️ ALLERGI</div>' : ''}
+        ${addonsHtml}
+        ${o.note ? `<div class="note">📝 ${o.note}</div>` : ''}
+        <button onclick="done(${id})">FERDIG</button>
+      `;
+      ordersDiv.appendChild(el);
+    });
+  }
+
+  seenOrders = currentIds;
+  initialLoadDone = true;
 });
 
 function done(num){
   db.ref("orders/"+num).once("value", s=>{
     if(!s.exists()) return;
-    db.ref("readyOrders/"+num).set({...s.val(),readyTime:Date.now()});
+    db.ref("readyOrders/"+num).set({...s.val(), readyTime:Date.now()});
     db.ref("orders/"+num).remove();
   });
 }
