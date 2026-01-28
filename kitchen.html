@@ -15,9 +15,9 @@ body {
 .order {
   padding:20px;
   margin:12px auto;
-  border-radius:10px;
+  border-radius:12px;
   font-size:26px;
-  max-width:650px;
+  max-width:700px;
   text-align:left;
 }
 
@@ -34,9 +34,12 @@ body {
   font-size:20px;
 }
 
-.addon {
-  font-size:20px;
-  margin-top:6px;
+.addons {
+  margin-top:8px;
+  padding:8px;
+  background:#000;
+  border-radius:8px;
+  font-size:22px;
   color:#00ff99;
 }
 </style>
@@ -56,6 +59,15 @@ firebase.initializeApp({
 });
 const db = firebase.database();
 
+let addonMap = {};
+
+/* 🔎 HENT ADD-ONS (ID → NAVN) */
+db.ref("addons").on("value", snap => {
+  addonMap = {};
+  snap.forEach(c => addonMap[c.key] = c.val().name);
+});
+
+/* 📋 ORDRE */
 db.ref("orders").on("value", snap => {
   orders.innerHTML = "";
   const now = Date.now();
@@ -68,8 +80,18 @@ db.ref("orders").on("value", snap => {
     else if (age > 120000) c = "yellow";
 
     let addonsHtml = "";
-    if (o.addons && o.addons.chimichurri) {
-      addonsHtml += `<div class="addon">🌿 Chimichurri</div>`;
+    if (o.addons) {
+      const list = Object.keys(o.addons)
+        .map(id => addonMap[id])
+        .filter(Boolean);
+
+      if (list.length) {
+        addonsHtml = `
+          <div class="addons">
+            ➕ ${list.join(" • ")}
+          </div>
+        `;
+      }
     }
 
     const d = document.createElement("div");
