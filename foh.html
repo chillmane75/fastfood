@@ -48,6 +48,8 @@ button {
 .addons {
   margin-top:20px;
   font-size:20px;
+  text-align:left;
+  display:inline-block;
 }
 </style>
 </head>
@@ -60,14 +62,7 @@ button {
 
 <select id="dish"></select>
 
-<br><br>
-
-<div class="addons">
-  <label>
-    <input type="checkbox" id="addon-chimi">
-    🌿 Chimichurri
-  </label>
-</div>
+<div class="addons" id="addons"></div>
 
 <br>
 
@@ -89,7 +84,7 @@ button {
 <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
 
 <script>
-var firebaseConfig = {
+const firebaseConfig = {
   apiKey: "AIzaSyBpCwh0JIuJphlEyCQTxhDOIdGm9fP5cg4",
   databaseURL: "https://the-shit-3bfd8-default-rtdb.europe-west1.firebasedatabase.app"
 };
@@ -98,16 +93,18 @@ if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
 
 let menu = {};
+let addons = {};
 let lastOrderId = null;
 let lastDishId = null;
 let busy = false;
 
+/* 🔢 NUMMER */
 db.ref("lastNumber").on("value", snap => {
-  const val = snap.val();
   document.getElementById("num").innerText =
-    typeof val === "number" ? val : "–";
+    typeof snap.val() === "number" ? snap.val() : "–";
 });
 
+/* 🍔 MENY */
 db.ref("menu").on("value", snap => {
   const sel = document.getElementById("dish");
   sel.innerHTML = "";
@@ -116,72 +113,99 @@ db.ref("menu").on("value", snap => {
   snap.forEach(child => {
     const d = child.val();
     const left = d.max - d.sold;
+    if (left <= 0) return;
+
     menu[child.key] = d;
-
-    let status = "🟢 Tilgjengelig";
-    if (left <= 0) status = "🔴 Utsolgt";
-    else if (left <= 3) status = "🟡 Få igjen";
-
     const opt = document.createElement("option");
     opt.value = child.key;
-    opt.text = `${d.name} – ${status}`;
-    opt.disabled = left <= 0;
+    opt.text = d.name;
     sel.appendChild(opt);
   });
 });
 
+/* ➕ ADD-ONS (DYNAMISK) */
+db.ref("addons").on("value", snap => {
+  const div = document.getElementById("addons");
+  div.innerHTML = "<strong>Add-ons</strong><br>";
+  addons = {};
+
+  if (!snap.exists()) {
+    div.style.display = "none";
+    return;
+  }
+
+  div.style.display = "block";
+
+  snap.forEach(child => {
+    const a = child.val();
+    addons[child.key] = a;
+
+    const label = document.createElement("label");
+    label.innerHTML = `
+      <input type="checkbox" data-addon="${child.key}">
+      🌿 ${a.name}
+    `;
+    div.appendChild(label);
+    div.appendChild(document.createElement("br"));
+  });
+});
+
+/* 🆕 NY ORDRE */
 function newOrder() {
   if (busy) return;
   busy = true;
-  document.getElementById("orderBtn").disabled = true;
+  orderBtn.disabled = true;
 
-  const dishId = document.getElementById("dish").value;
+  const dishId = dish.value;
   if (!dishId) return resetBusy();
 
-  db.ref("menu/" + dishId).transaction(dish => {
-    if (!dish || dish.sold >= dish.max) return;
-    dish.sold += 1;
-    return dish;
-  }, (err, committed, snap) => {
-    if (!committed) {
-      alert("❌ Utsolgt");
-      return resetBusy();
-    }
+  db.ref("menu/" + dishId).transaction(d => {
+    if (!d || d.sold >= d.max) return;
+    d.sold++;
+    return d;
+  }, (err, ok, snap) => {
+    if (!ok) return resetBusy();
 
-    db.ref("lastNumber").transaction(n => (n || 0) + 1, (e, ok, numSnap) => {
-      if (!ok) return resetBusy();
+    db.ref("lastNumber").transaction(n => (n || 0) + 1, (e, c, numSnap) => {
+      if (!c) return resetBusy();
 
-      const addons = {};
-      if (document.getElementById("addon-chimi").checked) {
-        addons.chimichurri = true;
-      }
+      const selectedAddons = {};
+      document
+        .querySelectorAll("[data-addon]:checked")
+        .forEach(el => selectedAddons[el.dataset.addon] = true);
 
       db.ref("orders/" + numSnap.val()).set({
         dish: snap.val().name,
-        allergy: document.getElementById("allergy").checked,
-        note: document.getElementById("note").value,
-        addons: addons,
+        allergy: allergy.checked,
+        note: note.value,
+        addons: selectedAddons,
         time: Date.now()
       });
 
       lastOrderId = numSnap.val();
       lastDishId = dishId;
 
-      document.getElementById("allergy").checked = false;
-      document.getElementById("note").value = "";
-      document.getElementById("addon-chimi").checked = false;
+      allergy.checked = false;
+      note.value = "";
+      document
+        .querySelectorAll("[data-addon]")
+        .forEach(el => el.checked = false);
 
       resetBusy();
     });
   });
 }
 
+/* ↩️ UNDO */
 function undoLast() {
-  if (lastOrderId === null) return;
+  if (!lastOrderId) return;
 
   db.ref("orders/" + lastOrderId).remove();
-  db.ref("menu/" + lastDishId + "/sold").transaction(n => Math.max(n - 1, 0));
-  db.ref("lastNumber").transaction(n => n === lastOrderId ? n - 1 : n);
+  db.ref("menu/" + lastDishId + "/sold")
+    .transaction(n => Math.max(n - 1, 0));
+
+  db.ref("lastNumber")
+    .transaction(n => n === lastOrderId ? n - 1 : n);
 
   lastOrderId = null;
   lastDishId = null;
@@ -189,15 +213,16 @@ function undoLast() {
 
 function resetBusy() {
   busy = false;
-  document.getElementById("orderBtn").disabled = false;
+  orderBtn.disabled = false;
 }
 
+/* 📊 STATUS */
 db.ref("orders").on("value", snap => {
-  const count = snap.numChildren();
+  const c = snap.numChildren();
   let s = "🟢 Rolig";
-  if (count >= 4) s = "🟡 Kø";
-  if (count >= 7) s = "🔴 Rush";
-  document.getElementById("status").innerText = "Status: " + s;
+  if (c >= 4) s = "🟡 Kø";
+  if (c >= 7) s = "🔴 Rush";
+  status.innerText = "Status: " + s;
 });
 </script>
 
