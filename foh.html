@@ -25,17 +25,17 @@ body {
 
 select, textarea {
   width:80%;
-  font-size:18px;
-  padding:10px;
+  font-size:20px;
+  padding:12px;
   margin-top:10px;
 }
 
 button {
-  font-size:26px;
-  padding:15px 35px;
+  font-size:28px;
+  padding:18px 40px;
   margin-top:20px;
   border:none;
-  border-radius:10px;
+  border-radius:12px;
   background:#00ff99;
   cursor:pointer;
 }
@@ -46,10 +46,27 @@ button {
 }
 
 .addons {
-  margin-top:20px;
-  font-size:20px;
-  text-align:left;
-  display:inline-block;
+  display:grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap:14px;
+  max-width:600px;
+  margin:25px auto;
+}
+
+.addon-btn {
+  background:#222;
+  border:3px solid #333;
+  border-radius:14px;
+  padding:20px;
+  font-size:22px;
+  cursor:pointer;
+  user-select:none;
+}
+
+.addon-btn.active {
+  background:#00ff99;
+  color:black;
+  border-color:#00ff99;
 }
 </style>
 </head>
@@ -64,11 +81,8 @@ button {
 
 <div class="addons" id="addons"></div>
 
-<br>
-
 <label>
-  <input type="checkbox" id="allergy">
-  ⚠️ ALLERGI
+  <input type="checkbox" id="allergy"> ⚠️ ALLERGI
 </label>
 
 <br><br>
@@ -85,145 +99,105 @@ button {
 
 <script>
 const firebaseConfig = {
-  apiKey: "AIzaSyBpCwh0JIuJphlEyCQTxhDOIdGm9fP5cg4",
-  databaseURL: "https://the-shit-3bfd8-default-rtdb.europe-west1.firebasedatabase.app"
+  apiKey:"AIzaSyBpCwh0JIuJphlEyCQTxhDOIdGm9fP5cg4",
+  databaseURL:"https://the-shit-3bfd8-default-rtdb.europe-west1.firebasedatabase.app"
 };
-
 if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
 
-let menu = {};
-let addons = {};
+let selectedAddons = {};
 let lastOrderId = null;
 let lastDishId = null;
 let busy = false;
 
-/* 🔢 NUMMER */
-db.ref("lastNumber").on("value", snap => {
-  document.getElementById("num").innerText =
-    typeof snap.val() === "number" ? snap.val() : "–";
+/* NUMMER */
+db.ref("lastNumber").on("value", s=>{
+  num.innerText = typeof s.val()==="number"?s.val():"–";
 });
 
-/* 🍔 MENY */
-db.ref("menu").on("value", snap => {
-  const sel = document.getElementById("dish");
-  sel.innerHTML = "";
-  menu = {};
-
-  snap.forEach(child => {
-    const d = child.val();
-    const left = d.max - d.sold;
-    if (left <= 0) return;
-
-    menu[child.key] = d;
-    const opt = document.createElement("option");
-    opt.value = child.key;
-    opt.text = d.name;
-    sel.appendChild(opt);
+/* MENY */
+db.ref("menu").on("value", snap=>{
+  dish.innerHTML="";
+  snap.forEach(c=>{
+    if(c.val().sold < c.val().max){
+      const o=document.createElement("option");
+      o.value=c.key;
+      o.text=c.val().name;
+      dish.appendChild(o);
+    }
   });
 });
 
-/* ➕ ADD-ONS (DYNAMISK) */
-db.ref("addons").on("value", snap => {
-  const div = document.getElementById("addons");
-  div.innerHTML = "<strong>Add-ons</strong><br>";
-  addons = {};
+/* ADD-ONS */
+db.ref("addons").on("value", snap=>{
+  addons.innerHTML="";
+  selectedAddons={};
 
-  if (!snap.exists()) {
-    div.style.display = "none";
-    return;
-  }
-
-  div.style.display = "block";
-
-  snap.forEach(child => {
-    const a = child.val();
-    addons[child.key] = a;
-
-    const label = document.createElement("label");
-    label.innerHTML = `
-      <input type="checkbox" data-addon="${child.key}">
-      🌿 ${a.name}
-    `;
-    div.appendChild(label);
-    div.appendChild(document.createElement("br"));
+  snap.forEach(c=>{
+    const b=document.createElement("div");
+    b.className="addon-btn";
+    b.innerText=c.val().name;
+    b.onclick=()=>{
+      b.classList.toggle("active");
+      selectedAddons[c.key]=b.classList.contains("active");
+    };
+    addons.appendChild(b);
   });
 });
 
-/* 🆕 NY ORDRE */
-function newOrder() {
-  if (busy) return;
-  busy = true;
-  orderBtn.disabled = true;
+/* NY ORDRE */
+function newOrder(){
+  if(busy) return;
+  busy=true; orderBtn.disabled=true;
 
-  const dishId = dish.value;
-  if (!dishId) return resetBusy();
+  const dishId=dish.value;
 
-  db.ref("menu/" + dishId).transaction(d => {
-    if (!d || d.sold >= d.max) return;
-    d.sold++;
-    return d;
-  }, (err, ok, snap) => {
-    if (!ok) return resetBusy();
+  db.ref("menu/"+dishId).transaction(d=>{
+    if(!d||d.sold>=d.max) return;
+    d.sold++; return d;
+  },(e,ok,snap)=>{
+    if(!ok) return reset();
 
-    db.ref("lastNumber").transaction(n => (n || 0) + 1, (e, c, numSnap) => {
-      if (!c) return resetBusy();
-
-      const selectedAddons = {};
-      document
-        .querySelectorAll("[data-addon]:checked")
-        .forEach(el => selectedAddons[el.dataset.addon] = true);
-
-      db.ref("orders/" + numSnap.val()).set({
-        dish: snap.val().name,
-        allergy: allergy.checked,
-        note: note.value,
-        addons: selectedAddons,
-        time: Date.now()
+    db.ref("lastNumber").transaction(n=>(n||0)+1,(e,c,nr)=>{
+      const addonsOut={};
+      Object.keys(selectedAddons).forEach(k=>{
+        if(selectedAddons[k]) addonsOut[k]=true;
       });
 
-      lastOrderId = numSnap.val();
-      lastDishId = dishId;
+      db.ref("orders/"+nr.val()).set({
+        dish:snap.val().name,
+        allergy:allergy.checked,
+        note:note.value,
+        addons:addonsOut,
+        time:Date.now()
+      });
 
-      allergy.checked = false;
-      note.value = "";
-      document
-        .querySelectorAll("[data-addon]")
-        .forEach(el => el.checked = false);
+      lastOrderId=nr.val();
+      lastDishId=dishId;
 
-      resetBusy();
+      document.querySelectorAll(".addon-btn")
+        .forEach(b=>b.classList.remove("active"));
+      selectedAddons={};
+      allergy.checked=false;
+      note.value="";
+      reset();
     });
   });
 }
 
-/* ↩️ UNDO */
-function undoLast() {
-  if (!lastOrderId) return;
-
-  db.ref("orders/" + lastOrderId).remove();
-  db.ref("menu/" + lastDishId + "/sold")
-    .transaction(n => Math.max(n - 1, 0));
-
+function undoLast(){
+  if(!lastOrderId) return;
+  db.ref("orders/"+lastOrderId).remove();
+  db.ref("menu/"+lastDishId+"/sold")
+    .transaction(n=>Math.max(n-1,0));
   db.ref("lastNumber")
-    .transaction(n => n === lastOrderId ? n - 1 : n);
-
-  lastOrderId = null;
-  lastDishId = null;
+    .transaction(n=>n===lastOrderId?n-1:n);
+  lastOrderId=null; lastDishId=null;
 }
 
-function resetBusy() {
-  busy = false;
-  orderBtn.disabled = false;
+function reset(){
+  busy=false; orderBtn.disabled=false;
 }
-
-/* 📊 STATUS */
-db.ref("orders").on("value", snap => {
-  const c = snap.numChildren();
-  let s = "🟢 Rolig";
-  if (c >= 4) s = "🟡 Kø";
-  if (c >= 7) s = "🔴 Rush";
-  status.innerText = "Status: " + s;
-});
 </script>
 
 </body>
